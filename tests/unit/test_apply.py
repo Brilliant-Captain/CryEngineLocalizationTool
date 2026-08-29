@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from cryengine_localization.core.apply import apply_catalog_to_json, plan_translation_changes
+from cryengine_localization.core.catalog import CatalogEntry
+
+
+def test_apply_localizations_changes_only_values() -> None:
+    data = {"Localizations": [{"key": "ui_start", "value": "Start"}, {"key": "ui_exit", "value": "Exit"}]}
+    entries = [
+        CatalogEntry("x.json:ui_start", "x.json", "ui_start", "Start", "hash", "开始"),
+        CatalogEntry("x.json:ui_exit", "x.json", "ui_exit", "Exit", "hash", "退出"),
+    ]
+
+    output = apply_catalog_to_json(data, entries)
+
+    assert output["Localizations"][0]["key"] == "ui_start"
+    assert output["Localizations"][0]["value"] == "开始"
+    assert data["Localizations"][0]["value"] == "Start"
+
+
+def test_dry_run_skips_empty_and_stale_translations() -> None:
+    entries = [
+        CatalogEntry("x:a", "x.json", "a", "A", "hash", "译文"),
+        CatalogEntry("x:b", "x.json", "b", "B", "hash", "", status="active"),
+        CatalogEntry("x:c", "x.json", "c", "C", "hash", "旧", status="stale"),
+    ]
+
+    changes = plan_translation_changes(entries)
+
+    assert [(change.text_key, change.translation) for change in changes] == [("a", "译文")]
+
+
+def test_apply_rejects_placeholder_loss() -> None:
+    data = {"Localizations": [{"key": "x", "value": "Hello {name}"}]}
+    entries = [CatalogEntry("x.json:x", "x.json", "x", "Hello {name}", "hash", "你好")]
+
+    with pytest.raises(ValueError, match="placeholder"):
+        apply_catalog_to_json(data, entries)
+
