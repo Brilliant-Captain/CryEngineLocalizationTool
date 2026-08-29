@@ -1,0 +1,41 @@
+name: Build Windows GUI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and build tools
+        shell: powershell
+        run: python -m pip install -e ".[fonts,textures]" pyinstaller
+      - name: Build windowed executable
+        shell: powershell
+        run: .\scripts\build_exe.ps1 -OutputDir .\release
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CryEngineLocalization-windows
+          path: release/
+      - name: Attach executable to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem -LiteralPath .\release -File | ForEach-Object { $_.FullName })
+          if ($files.Count -eq 0) { throw "No release files were produced" }
+          & gh release create "${{ github.ref_name }}" @files --generate-notes

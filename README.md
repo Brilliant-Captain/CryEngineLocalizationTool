@@ -45,4 +45,6 @@ cry-localize gui
 
 `gui` 只是 CLI 的 Tkinter 外壳，不包含独立资源处理逻辑；在无图形环境时请使用命令行。
 
+需要独立 Windows 程序时，参见 [Windows 发布说明](docs/releasing.md)。GitHub Release 会提供不含游戏资源的 `CryEngineLocalization.exe` 和 SHA-256 清单。
+
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。

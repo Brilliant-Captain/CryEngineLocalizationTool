@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 build/
 dist/
+release/
 output/
 staging/
 reports/
@@ -18,4 +19,3 @@ reports/
 *.bak
 *.log
 user-config.toml
-

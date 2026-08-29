@@ -16,6 +16,7 @@ dependencies = []
 test = ["pytest>=7.4"]
 textures = ["Pillow>=10"]
 fonts = ["fonttools>=4.0"]
+build = ["pyinstaller>=6.0"]
 
 [project.scripts]
 cry-localize = "cryengine_localization.cli.main:main"
