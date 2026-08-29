@@ -87,7 +87,7 @@ def apply_catalog_to_pak(
 ) -> tuple[TranslationChange, ...]:
     """Write a translated PAK to a new path, leaving the source untouched."""
 
-    from cryengine_localization.adapters.pak import build_pak, scan_pak
+    from cryengine_localization.adapters.pak import build_pak, normalize_entry_path, scan_pak
     from cryengine_localization.io.json_localization import dump_json, parse_json_relaxed
     from cryengine_localization.core.catalog import catalog_from_json
 
@@ -98,8 +98,13 @@ def apply_catalog_to_pak(
     by_path: dict[str, list[CatalogEntry]] = {}
     for entry in source_entries:
         if entry.translation and entry.status not in {"stale", "orphaned", "invalid"}:
-            by_path.setdefault(entry.source_path.replace("\\", "/"), []).append(entry)
+            canonical_path = normalize_entry_path(entry.source_path)
+            by_path.setdefault(canonical_path, []).append(entry)
     archive = scan_pak(source_pak)
+    archive_paths = {entry.path for entry in archive.entries}
+    unknown_paths = sorted(set(by_path) - archive_paths)
+    if unknown_paths:
+        raise ValueError("translation source path is absent from PAK: " + ", ".join(unknown_paths))
     payload: dict[str, bytes] = {}
     from zipfile import ZipFile
 

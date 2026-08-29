@@ -58,3 +58,15 @@ def test_apply_pak_rejects_stale_source_hash(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="source changed"):
         apply_catalog_to_pak(str(pak), [entry], str(tmp_path / "out.pak"))
+
+
+def test_apply_pak_rejects_unsafe_or_unknown_source_path(tmp_path) -> None:
+    pak = tmp_path / "source.pak"
+    build_pak({"x.json": b'{"value":"x"}'}, pak)
+    unsafe = CatalogEntry("../x.json:x", "../x.json", "x", "x", "hash", "译文")
+    unknown = CatalogEntry("missing.json:x", "missing.json", "x", "x", "hash", "译文")
+
+    with pytest.raises(ValueError, match="parent traversal"):
+        apply_catalog_to_pak(str(pak), [unsafe], str(tmp_path / "unsafe.pak"))
+    with pytest.raises(ValueError, match="absent from PAK"):
+        apply_catalog_to_pak(str(pak), [unknown], str(tmp_path / "unknown.pak"))
