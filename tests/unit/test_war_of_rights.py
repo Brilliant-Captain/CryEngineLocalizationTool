@@ -8,6 +8,7 @@ from cryengine_localization.adapters.war_of_rights import (
     preview_language_config,
     reject_duplicate_english_overlay,
     restore_backup,
+    write_language_config,
 )
 
 
@@ -45,3 +46,14 @@ def test_backup_and_restore_verify_hash(tmp_path) -> None:
     restore_backup(record)
 
     assert source.read_text(encoding="utf-8") == "g_language=english\n"
+
+
+def test_write_language_config_keeps_source_untouched(tmp_path) -> None:
+    source = tmp_path / "autoexec.cfg"
+    output = tmp_path / "generated" / "autoexec.cfg"
+    source.write_text("g_language=french\n", encoding="utf-8")
+
+    write_language_config(source, output, "english")
+
+    assert source.read_text(encoding="utf-8") == "g_language=french\n"
+    assert "g_language=english" in output.read_text(encoding="utf-8")

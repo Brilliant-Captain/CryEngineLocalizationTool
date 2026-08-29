@@ -64,3 +64,29 @@ def test_cli_build_writes_manifest_without_absolute_source_path(tmp_path, capsys
     assert str(tmp_path) not in manifest.read_text(encoding="utf-8")
     with zipfile.ZipFile(output) as archive:
         assert "开始".encode("utf-8") in archive.read("Localization/english/MainMenu.json")
+
+
+def test_cli_install_dry_run_does_not_write_game_root(tmp_path, capsys) -> None:
+    game = tmp_path / "game"
+    game.mkdir()
+    source = tmp_path / "patch.pak"
+    source.write_bytes(b"patch")
+    record = tmp_path / "install.json"
+
+    assert main(
+        [
+            "install",
+            "--game-root",
+            str(game),
+            "--backup-dir",
+            str(tmp_path / "backup"),
+            "--record",
+            str(record),
+            "--file",
+            f"{source}=Assets/patch.pak",
+            "--dry-run",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert not (game / "Assets" / "patch.pak").exists()
+    assert not record.exists()

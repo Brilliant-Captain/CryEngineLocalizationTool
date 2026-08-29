@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import difflib
+import os
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,6 +72,33 @@ def preview_language_config(config_text: str, language: str = "english") -> Conf
     after = "".join(lines)
     diff = tuple(difflib.unified_diff(config_text.splitlines(), after.splitlines(), fromfile="before", tofile="after"))
     return ConfigPreview(config_text, after, diff)
+
+
+def write_language_config(
+    config_path: str | Path,
+    output_path: str | Path,
+    language: str = "english",
+) -> Path:
+    """Write a patched config to a distinct path using an atomic temporary file."""
+
+    source = Path(config_path).expanduser().resolve()
+    destination = Path(output_path).expanduser().resolve()
+    if source == destination:
+        raise ValueError("output config must differ from source config")
+    preview = preview_language_config(source.read_text(encoding="utf-8"), language)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".partial", dir=destination.parent
+    )
+    os.close(fd)
+    temporary = Path(temporary_name)
+    try:
+        temporary.write_text(preview.after, encoding="utf-8", newline="")
+        os.replace(temporary, destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return destination
 
 
 @dataclass(frozen=True)

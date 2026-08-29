@@ -12,25 +12,37 @@
 ## 开发
 
 ```powershell
-python -m pip install -e ".[test]"
+python -m pip install -e ".[test,fonts,textures]"
 python -m pytest -q
 cry-localize --help
 ```
 
-核心依赖只使用 Python 标准库。DDS 处理可选安装 Pillow；字体子集需要 fontTools 和外部 FFDec CLI。工具路径通过命令行参数或配置显式传入，不会把用户机器路径写入 manifest 或源代码。
+核心图像编码使用 Python 标准库；`fonts` extra 提供 fontTools，`textures` extra 为 PNG/PSD 等额外格式提供 Pillow。GFX 写回仍需要用户本机的 FFDec CLI（不可将其商业/反编译工具打进仓库）；`cry-localize tools doctor` 会自动探测解释器和工具。工具路径通过命令行参数或环境配置显式传入，不会把用户机器路径写入 manifest 或源代码。
 
 ## CLI 示例
 
 ```powershell
-cry-localize identify C:\path\to\cryengine-project
-cry-localize pak list C:\path\to\Assets\GameData.pak
-cry-localize catalog export C:\path\to\Assets\GameData.pak --output translations.csv
+cry-localize identify <PROJECT_ROOT>
+cry-localize pak list <GAME_ROOT>\Assets\GameData.pak
+cry-localize catalog export <GAME_ROOT>\Assets\GameData.pak --output translations.csv
 cry-localize apply translations.csv --dry-run
 cry-localize apply translations.csv --source-pak GameData.pak --output-pak output\GameData.pak
-cry-localize font scan gfxfontlib.gfx --ffdec C:\tools\ffdec-cli.exe
-cry-localize font replace gfxfontlib.gfx --output-gfx output\gfxfontlib.gfx --ffdec C:\tools\ffdec-cli.exe --slot 7=C:\fonts\regular.ttf --slot 16=C:\fonts\bold.ttf
+cry-localize font scan gfxfontlib.gfx --ffdec <FFDEC_CLI>
+cry-localize font replace gfxfontlib.gfx --output-gfx output\gfxfontlib.gfx --ffdec <FFDEC_CLI> --slot 7=<REGULAR_FONT> --slot 16=<BOLD_FONT>
+cry-localize font coverage <REGULAR_FONT> translation-text.txt
+cry-localize font subset <REGULAR_FONT> translation-text.txt --output-font output\regular-subset.ttf
 cry-localize texture inspect menu.dds
+cry-localize texture encode menu.png --output-dds output\menu.dds
 cry-localize config preview autoexec.cfg --language english
+cry-localize config write autoexec.cfg --output output\autoexec.cfg --language english
+cry-localize install --game-root <GAME_ROOT> --backup-dir backups --record install.json --file output\GameData.pak=Assets\GameData.pak --dry-run
+cry-localize install --game-root <GAME_ROOT> --backup-dir backups --record install.json --file output\GameData.pak=Assets\GameData.pak
+cry-localize rollback install.json
+cry-localize gui
 ```
 
 `apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。War of Rights 的直接安装、配置备份和字体/贴图依赖说明见 `docs/adapters/war-of-rights.md`。
+
+`gui` 只是 CLI 的 Tkinter 外壳，不包含独立资源处理逻辑；在无图形环境时请使用命令行。
+
+如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。

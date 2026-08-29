@@ -11,12 +11,31 @@ from pathlib import Path
 from cryengine_localization import __version__
 from cryengine_localization.adapters.cryengine import identify_project
 from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
-from cryengine_localization.adapters.gfxfont import replace_font_slots, scan_gfx_fonts
-from cryengine_localization.adapters.textures import parse_dds_header, replace_texture_in_pak
-from cryengine_localization.adapters.war_of_rights import preview_language_config
+from cryengine_localization.adapters.gfxfont import (
+    inspect_font_coverage,
+    replace_font_slots,
+    scan_gfx_fonts,
+    subset_font,
+)
+from cryengine_localization.adapters.textures import (
+    encode_image_file_to_dds,
+    parse_dds_header,
+    replace_texture_in_pak,
+)
+from cryengine_localization.adapters.war_of_rights import preview_language_config, write_language_config
 from cryengine_localization.core.apply import apply_catalog_to_pak, plan_translation_changes
 from cryengine_localization.core.catalog import catalog_from_json_bytes
 from cryengine_localization.core.manifest import build_manifest, sha256_file, write_manifest
+from cryengine_localization.core.install import (
+    InstallItem,
+    install_files,
+    plan_install,
+    read_install_record,
+    rollback_install,
+    record_to_dict,
+    write_install_record,
+)
+from cryengine_localization.core.tools import discover_tools
 from cryengine_localization.io.csv_codec import export_catalog, import_catalog
 
 
@@ -162,9 +181,45 @@ def _cmd_font_replace(args: argparse.Namespace) -> int:
     return 0
 
 
+def _font_python(executable: str | None) -> str:
+    if executable:
+        return executable
+    info = discover_tools().get("fontTools")
+    if info is None or not info.available or not info.path:
+        raise RuntimeError("fontTools is unavailable; install with `pip install '.[fonts]'` or pass --python")
+    return info.path
+
+
+def _cmd_font_subset(args: argparse.Namespace) -> int:
+    output = subset_font(
+        args.font,
+        args.text,
+        args.output_font,
+        python_executable=_font_python(args.python),
+    )
+    print(output)
+    return 0
+
+
+def _cmd_font_coverage(args: argparse.Namespace) -> int:
+    coverage = inspect_font_coverage(
+        args.font,
+        args.text,
+        python_executable=_font_python(args.python),
+    )
+    print(json.dumps(coverage.__dict__, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_texture_inspect(args: argparse.Namespace) -> int:
     metadata = parse_dds_header(Path(args.dds).read_bytes())
     print(json.dumps(metadata.__dict__, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_texture_encode(args: argparse.Namespace) -> int:
+    output = encode_image_file_to_dds(args.image, args.output_dds, mipmaps=not args.no_mipmaps)
+    print(output)
     return 0
 
 
@@ -184,6 +239,77 @@ def _cmd_config_preview(args: argparse.Namespace) -> int:
     text = Path(args.config).read_text(encoding="utf-8")
     preview = preview_language_config(text, args.language)
     print(json.dumps({"after": preview.after, "diff": list(preview.diff)}, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_config_write(args: argparse.Namespace) -> int:
+    output = write_language_config(args.config, args.output, args.language)
+    print(output)
+    return 0
+
+
+def _cmd_tools_doctor(args: argparse.Namespace) -> int:
+    report = discover_tools(ffdec=args.ffdec)
+    print(json.dumps({name: info.as_dict() for name, info in report.items()}, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _parse_install_items(specifications: list[str]) -> list[InstallItem]:
+    items: list[InstallItem] = []
+    for specification in specifications:
+        source, separator, destination = specification.partition("=")
+        if not separator or not source or not destination:
+            raise ValueError(f"invalid --file value {specification!r}; expected SOURCE=GAME_RELATIVE_PATH")
+        items.append(InstallItem(Path(source), destination))
+    if not items:
+        raise ValueError("at least one --file SOURCE=GAME_RELATIVE_PATH is required")
+    return items
+
+
+def _cmd_install(args: argparse.Namespace) -> int:
+    items = _parse_install_items(args.file)
+    if args.dry_run:
+        planned = plan_install(args.game_root, items)
+        print(
+            json.dumps(
+                [
+                    {
+                        "source": str(item.source),
+                        "destination": str(item.destination),
+                        "destination_existed": item.destination_existed,
+                        "backup_sha256": item.backup_sha256,
+                        "installed_sha256": item.installed_sha256,
+                    }
+                    for item in planned
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    record = install_files(
+        args.game_root,
+        items,
+        backup_dir=args.backup_dir,
+        process_names=args.process_name or ("WarOfRights.exe", "War of Rights.exe"),
+    )
+    write_install_record(record, args.record)
+    print(f"installed {len(record.items)} files")
+    print(f"record {Path(args.record).expanduser().resolve()}")
+    return 0
+
+
+def _cmd_rollback(args: argparse.Namespace) -> int:
+    record = read_install_record(args.record)
+    rollback_install(record)
+    print(f"restored {len(record.items)} files")
+    return 0
+
+
+def _cmd_gui(args: argparse.Namespace) -> int:
+    from cryengine_localization.gui import launch_gui
+
+    launch_gui()
     return 0
 
 
@@ -242,20 +368,36 @@ def build_parser() -> argparse.ArgumentParser:
     font_sub = font.add_subparsers(dest="font_command", required=True)
     font_scan = font_sub.add_parser("scan")
     font_scan.add_argument("gfx")
-    font_scan.add_argument("--ffdec", required=True)
+    font_scan.add_argument("--ffdec")
     font_scan.set_defaults(func=_cmd_font_scan)
     font_replace = font_sub.add_parser("replace")
     font_replace.add_argument("gfx")
     font_replace.add_argument("--output-gfx", required=True)
-    font_replace.add_argument("--ffdec", required=True)
+    font_replace.add_argument("--ffdec")
     font_replace.add_argument("--slot", action="append", required=True, help="FONT_ID=FONT_FILE")
     font_replace.set_defaults(func=_cmd_font_replace)
+    font_subset = font_sub.add_parser("subset")
+    font_subset.add_argument("font")
+    font_subset.add_argument("text")
+    font_subset.add_argument("--output-font", required=True)
+    font_subset.add_argument("--python")
+    font_subset.set_defaults(func=_cmd_font_subset)
+    font_coverage = font_sub.add_parser("coverage")
+    font_coverage.add_argument("font")
+    font_coverage.add_argument("text")
+    font_coverage.add_argument("--python")
+    font_coverage.set_defaults(func=_cmd_font_coverage)
 
     texture = sub.add_parser("texture", help="inspect or replace DDS textures")
     texture_sub = texture.add_subparsers(dest="texture_command", required=True)
     texture_inspect = texture_sub.add_parser("inspect")
     texture_inspect.add_argument("dds")
     texture_inspect.set_defaults(func=_cmd_texture_inspect)
+    texture_encode = texture_sub.add_parser("encode")
+    texture_encode.add_argument("image")
+    texture_encode.add_argument("--output-dds", required=True)
+    texture_encode.add_argument("--no-mipmaps", action="store_true")
+    texture_encode.set_defaults(func=_cmd_texture_encode)
     texture_replace = texture_sub.add_parser("replace")
     texture_replace.add_argument("source_pak")
     texture_replace.add_argument("entry")
@@ -270,6 +412,33 @@ def build_parser() -> argparse.ArgumentParser:
     config_preview.add_argument("config")
     config_preview.add_argument("--language", default="english")
     config_preview.set_defaults(func=_cmd_config_preview)
+    config_write = config_sub.add_parser("write")
+    config_write.add_argument("config")
+    config_write.add_argument("--output", required=True)
+    config_write.add_argument("--language", default="english")
+    config_write.set_defaults(func=_cmd_config_write)
+
+    tools = sub.add_parser("tools", help="diagnose optional external tools")
+    tools_sub = tools.add_subparsers(dest="tools_command", required=True)
+    doctor = tools_sub.add_parser("doctor")
+    doctor.add_argument("--ffdec")
+    doctor.set_defaults(func=_cmd_tools_doctor)
+
+    install = sub.add_parser("install", help="install generated files with backup and rollback")
+    install.add_argument("--game-root", required=True)
+    install.add_argument("--backup-dir", required=True)
+    install.add_argument("--record", required=True)
+    install.add_argument("--file", action="append", default=[], help="SOURCE=GAME_RELATIVE_PATH")
+    install.add_argument("--process-name", action="append", default=[])
+    install.add_argument("--dry-run", action="store_true")
+    install.set_defaults(func=_cmd_install)
+
+    rollback = sub.add_parser("rollback", help="restore an install record")
+    rollback.add_argument("record")
+    rollback.set_defaults(func=_cmd_rollback)
+
+    gui = sub.add_parser("gui", help="launch the optional Tkinter interface")
+    gui.set_defaults(func=_cmd_gui)
     return parser
 
 

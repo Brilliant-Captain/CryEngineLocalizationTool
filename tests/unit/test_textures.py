@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import struct
+import zlib
 
 import pytest
 
 from cryengine_localization.adapters.textures import (
     TextureValidationError,
     parse_dds_header,
+    encode_rgba_to_dds,
+    read_image_rgba,
     replace_texture_in_pak,
     validate_texture_replacement,
 )
@@ -62,3 +65,51 @@ def test_replace_texture_in_pak_preserves_entry_path_and_metadata(tmp_path) -> N
     with zipfile.ZipFile(output) as archive:
         assert archive.namelist() == ["ui/menu.dds", "ui/other.txt"]
         assert parse_dds_header(archive.read("ui/menu.dds")).fourcc == "DXT5"
+
+
+def test_pure_python_encoder_writes_dxt5_with_full_mip_chain() -> None:
+    pixels = bytes([255, 0, 0, 255] * 16)
+
+    encoded = encode_rgba_to_dds(4, 4, pixels, mipmaps=True)
+    metadata = parse_dds_header(encoded)
+
+    assert metadata.width == 4
+    assert metadata.height == 4
+    assert metadata.mip_count == 3
+    assert metadata.fourcc == "DXT5"
+    assert metadata.has_alpha is True
+    assert len(encoded) == 128 + 16 + 16 + 16
+
+
+def test_pure_python_encoder_avoids_dxt1_transparency_mode_for_solid_white() -> None:
+    encoded = encode_rgba_to_dds(4, 4, bytes([255, 255, 255, 255] * 16), mipmaps=False)
+    color_endpoint_0, color_endpoint_1 = struct.unpack_from("<HH", encoded, 128 + 8)
+
+    assert color_endpoint_0 > color_endpoint_1
+
+
+def test_png_reader_is_available_without_pillow(tmp_path) -> None:
+    def chunk(name: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + name + payload + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\x0a\x14\x1e\xff"))
+        + chunk(b"IEND", b"")
+    )
+    path = tmp_path / "pixel.png"
+    path.write_bytes(png)
+
+    image = read_image_rgba(path)
+
+    assert (image.width, image.height, image.pixels) == (1, 1, bytes([10, 20, 30, 255]))
+
+
+def test_binary_ppm_reader_keeps_whitespace_valued_first_pixel(tmp_path) -> None:
+    path = tmp_path / "pixel.ppm"
+    path.write_bytes(b"P6\n1 1\n255\n" + bytes([32, 10, 20]))
+
+    image = read_image_rgba(path)
+
+    assert image.pixels == bytes([32, 10, 20, 255])

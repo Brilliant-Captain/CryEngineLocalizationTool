@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import re
+import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import zlib
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import Mapping
 
@@ -62,9 +62,20 @@ def parse_ffdec_font_dump(text: str) -> tuple[FontSlot, ...]:
     return tuple(slots)
 
 
-def scan_gfx_fonts(gfx_path: str | Path, ffdec_cli: str | Path) -> tuple[FontSlot, ...]:
+def _resolve_ffdec(ffdec_cli: str | Path | None) -> Path:
+    if ffdec_cli:
+        return Path(ffdec_cli).expanduser().resolve()
+    from cryengine_localization.core.tools import discover_tools
+
+    info = discover_tools()["ffdec"]
+    if info.available and info.path:
+        return Path(info.path)
+    raise GfxToolError("FFDec is unavailable; pass --ffdec or set FFDEC_CLI")
+
+
+def scan_gfx_fonts(gfx_path: str | Path, ffdec_cli: str | Path | None = None) -> tuple[FontSlot, ...]:
     path = Path(gfx_path).expanduser().resolve()
-    tool = Path(ffdec_cli).expanduser().resolve()
+    tool = _resolve_ffdec(ffdec_cli)
     validate_gfx_bytes(path.read_bytes())
     try:
         completed = subprocess.run(
@@ -171,7 +182,7 @@ def replace_font_slots(
     output_gfx: str | Path,
     replacements: Mapping[int, str | Path],
     *,
-    ffdec_cli: str | Path,
+    ffdec_cli: str | Path | None = None,
 ) -> Path:
     """Replace discovered DefineFont3 slots using FFDec, atomically.
 
@@ -187,7 +198,8 @@ def replace_font_slots(
         raise ValueError("output GFX must differ from input GFX")
     if not replacements:
         raise ValueError("at least one font replacement is required")
-    slots = {slot.character_id for slot in scan_gfx_fonts(source, ffdec_cli)}
+    tool = _resolve_ffdec(ffdec_cli)
+    slots = {slot.character_id for slot in scan_gfx_fonts(source, tool)}
     unknown = sorted(set(replacements) - slots)
     if unknown:
         raise GfxToolError(f"font slot(s) not found in GFX: {unknown}")
@@ -208,7 +220,7 @@ def replace_font_slots(
             stage = Path(name)
             temporary_paths.append(stage)
             command = build_font_replace_command(
-                ffdec_cli, current, stage, character_id, font_file
+                tool, current, stage, character_id, font_file
             )
             try:
                 subprocess.run(command, check=True, capture_output=True, text=True)

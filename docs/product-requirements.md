@@ -19,10 +19,10 @@
 5. 根据资源路径、文本键和原文哈希标记 `active/new/stale/orphaned/invalid`。
 6. dry-run 输出将修改的资源、键和译文，不写入源包或游戏目录。
 7. War of Rights 适配器默认拒绝重复 `Localization/english/` 路径，支持语言配置预览、备份和恢复。
-8. GFX 字体槽位动态发现，支持全量字体和 fontTools 子集命令；DDS 替换校验尺寸、MIP、压缩格式和 Alpha。
+8. GFX 字体槽位动态发现，支持全量字体、fontTools 子集和覆盖率报告；DDS 替换校验尺寸、MIP、压缩格式和 Alpha，并可用标准库 PNG/PPM 编码 DXT5。
 9. 构建输出包含 manifest、源包哈希、替换项、字体方案和构建时间；失败不生成最终成品。
+10. 安装命令必须检查游戏进程、验证目标路径、原子复制并保存可验证的 rollback record；GUI 只能调用核心/CLI，不得绕过安全检查。
 
 ## 验收标准
 
 所有核心逻辑有合成 fixture 单元/集成测试；真实游戏资源只作为本地手工输入。仓库扫描不得发现 PAK、GFX、DDS、字体、临时输出或用户绝对路径。
-
