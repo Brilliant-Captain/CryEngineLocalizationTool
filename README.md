@@ -47,4 +47,6 @@ cry-localize gui
 
 需要独立 Windows 程序时，参见 [Windows 发布说明](docs/releasing.md)。GitHub Release 会提供不含游戏资源的 `CryEngineLocalization.exe` 和 SHA-256 清单。
 
+完整的安装、GUI、CSV、War of Rights overlay、字体、回滚和故障排除步骤见 [详细使用手册](docs/usage.md)。
+
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。
