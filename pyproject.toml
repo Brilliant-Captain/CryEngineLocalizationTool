@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cryengine-localization"
+version = "0.1.0"
+description = "Safe, source-preserving localization tools for CryEngine projects"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "CryEngine Localization Contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+textures = ["Pillow>=10"]
+fonts = ["fonttools>=4.0"]
+
+[project.scripts]
+cry-localize = "cryengine_localization.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+

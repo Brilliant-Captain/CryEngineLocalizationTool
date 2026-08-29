@@ -1,0 +1,2 @@
+"""CryEngine-family adapters."""
+
