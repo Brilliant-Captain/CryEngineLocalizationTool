@@ -28,6 +28,7 @@ def build_manifest(
     build_time_utc: str | None = None,
     output_sha256: str | None = None,
     project: str | None = None,
+    overlay_mode: str | None = None,
 ) -> dict[str, Any]:
     if build_time_utc is None:
         build_time_utc = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -36,6 +37,7 @@ def build_manifest(
         "tool_version": tool_version,
         "cryengine_version": engine_version or "unknown",
         "project": project,
+        "overlay_mode": overlay_mode,
         "target_language": target_language,
         "source_packages": list(source_packages),
         "replacements": list(replacements),
@@ -53,4 +55,3 @@ def write_manifest(manifest: dict[str, Any], path: str | Path) -> Path:
         encoding="utf-8",
     )
     return destination
-

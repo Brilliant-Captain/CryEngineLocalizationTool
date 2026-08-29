@@ -37,6 +37,16 @@ def test_duplicate_english_overlay_is_rejected_case_insensitively() -> None:
         )
 
 
+def test_explicit_english_overlay_returns_collisions() -> None:
+    collisions = reject_duplicate_english_overlay(
+        ["Localization/english/MainMenu.json"],
+        ["localization/ENGLISH/mainmenu.json"],
+        allow_explicit_overlay=True,
+    )
+
+    assert collisions == ("localization/ENGLISH/mainmenu.json",)
+
+
 def test_backup_and_restore_verify_hash(tmp_path) -> None:
     source = tmp_path / "autoexec.cfg"
     source.write_text("g_language=english\n", encoding="utf-8")

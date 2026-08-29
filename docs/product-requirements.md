@@ -18,7 +18,7 @@
 4. CSV 独立保存 `original_text`、`original_hash` 和 `translation`；导入不能篡改原文字段。
 5. 根据资源路径、文本键和原文哈希标记 `active/new/stale/orphaned/invalid`。
 6. dry-run 输出将修改的资源、键和译文，不写入源包或游戏目录。
-7. War of Rights 适配器默认拒绝重复 `Localization/english/` 路径，支持语言配置预览、备份和恢复。
+7. War of Rights 适配器支持经实测有效的显式 `Localization/english/` 路径覆盖模式，记录包加载顺序和 manifest；同时保留未声明用途时的重复路径保护，并支持语言配置预览、备份和恢复。
 8. GFX 字体槽位动态发现，支持全量字体、fontTools 子集和覆盖率报告；DDS 替换校验尺寸、MIP、压缩格式和 Alpha，并可用标准库 PNG/PPM 编码 DXT5。
 9. 构建输出包含 manifest、源包哈希、替换项、字体方案和构建时间；失败不生成最终成品。
 10. 安装命令必须检查游戏进程、验证目标路径、原子复制并保存可验证的 rollback record；GUI 只能调用核心/CLI，不得绕过安全检查。

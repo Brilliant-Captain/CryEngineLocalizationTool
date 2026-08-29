@@ -151,6 +151,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
         font_strategy={"mode": args.font_mode, "character_ids": args.font_character_id},
         output_sha256=sha256_file(output),
         project=args.project,
+        overlay_mode=args.overlay_mode,
     )
     write_manifest(manifest, args.manifest)
     print(f"wrote {output}")
@@ -360,6 +361,12 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--language", default="zh-CN")
     build.add_argument("--engine-version")
     build.add_argument("--project")
+    build.add_argument(
+        "--overlay-mode",
+        choices=("standalone", "english-path-overlay"),
+        default="standalone",
+        help="record how the output PAK should be loaded",
+    )
     build.add_argument("--font-mode", choices=("none", "full", "subset"), default="none")
     build.add_argument("--font-character-id", action="append", type=int, default=[])
     build.set_defaults(func=_cmd_build)

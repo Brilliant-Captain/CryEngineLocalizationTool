@@ -20,6 +20,7 @@ def test_manifest_contains_reproducibility_fields(tmp_path) -> None:
         font_strategy={"mode": "subset", "character_ids": [7, 16]},
         build_time_utc="2026-01-01T00:00:00Z",
         output_sha256="output-hash",
+        overlay_mode="english-path-overlay",
     )
     path = tmp_path / "manifest.json"
     write_manifest(manifest, path)
@@ -29,4 +30,4 @@ def test_manifest_contains_reproducibility_fields(tmp_path) -> None:
     assert loaded["source_packages"][0]["sha256"] == digest
     assert loaded["font_strategy"]["character_ids"] == [7, 16]
     assert loaded["output_sha256"] == "output-hash"
-
+    assert loaded["overlay_mode"] == "english-path-overlay"

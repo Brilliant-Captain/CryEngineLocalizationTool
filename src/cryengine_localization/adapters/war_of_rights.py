@@ -20,8 +20,11 @@ class DuplicateEnglishPathError(ValueError):
 
 
 def reject_duplicate_english_overlay(
-    source_paths: list[str] | tuple[str, ...], overlay_paths: list[str] | tuple[str, ...]
-) -> None:
+    source_paths: list[str] | tuple[str, ...],
+    overlay_paths: list[str] | tuple[str, ...],
+    *,
+    allow_explicit_overlay: bool = False,
+) -> tuple[str, ...]:
     source = {
         path.replace("\\", "/").casefold()
         for path in source_paths
@@ -33,9 +36,12 @@ def reject_duplicate_english_overlay(
         if path.replace("\\", "/").casefold() in source
     )
     if collisions:
+        if allow_explicit_overlay:
+            return tuple(collisions)
         raise DuplicateEnglishPathError(
             "overlay duplicates official English paths: " + ", ".join(collisions)
         )
+    return ()
 
 
 @dataclass(frozen=True)
