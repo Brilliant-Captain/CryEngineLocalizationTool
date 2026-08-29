@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from cryengine_localization.core.apply import apply_catalog_to_json, plan_translation_changes
+from cryengine_localization.core.apply import apply_catalog_to_json, apply_catalog_to_pak, plan_translation_changes
+from cryengine_localization.adapters.pak import build_pak
 from cryengine_localization.core.catalog import CatalogEntry
 
 
@@ -41,3 +42,19 @@ def test_apply_rejects_placeholder_loss() -> None:
     with pytest.raises(ValueError, match="placeholder"):
         apply_catalog_to_json(data, entries)
 
+
+def test_apply_pak_rejects_in_place_output(tmp_path) -> None:
+    pak = tmp_path / "source.pak"
+    build_pak({"x.json": b'{"value":"x"}'}, pak)
+
+    with pytest.raises(ValueError, match="differ"):
+        apply_catalog_to_pak(str(pak), [], str(pak))
+
+
+def test_apply_pak_rejects_stale_source_hash(tmp_path) -> None:
+    pak = tmp_path / "source.pak"
+    build_pak({"x.json": b'{"Localizations":[{"key":"x","value":"New"}]}'}, pak)
+    entry = CatalogEntry("x.json:x", "x.json", "x", "Old", "old-hash", "译文")
+
+    with pytest.raises(ValueError, match="source changed"):
+        apply_catalog_to_pak(str(pak), [entry], str(tmp_path / "out.pak"))
