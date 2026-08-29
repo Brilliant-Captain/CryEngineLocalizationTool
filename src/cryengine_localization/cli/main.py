@@ -11,7 +11,7 @@ from pathlib import Path
 from cryengine_localization import __version__
 from cryengine_localization.adapters.cryengine import identify_project
 from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
-from cryengine_localization.adapters.gfxfont import scan_gfx_fonts
+from cryengine_localization.adapters.gfxfont import replace_font_slots, scan_gfx_fonts
 from cryengine_localization.adapters.textures import parse_dds_header, replace_texture_in_pak
 from cryengine_localization.adapters.war_of_rights import preview_language_config
 from cryengine_localization.core.apply import apply_catalog_to_pak, plan_translation_changes
@@ -73,12 +73,15 @@ def _cmd_pak_build(args: argparse.Namespace) -> int:
     root = Path(args.input).expanduser().resolve()
     if not root.is_dir():
         raise NotADirectoryError(root)
+    output_path = Path(args.output).expanduser().resolve()
     entries = {
         path.relative_to(root).as_posix(): path
         for path in root.rglob("*")
-        if path.is_file() and not path.name.endswith(".partial")
+        if path.is_file()
+        and not path.name.endswith(".partial")
+        and path.resolve() != output_path
     }
-    output = build_pak(entries, args.output)
+    output = build_pak(entries, output_path)
     print(output)
     return 0
 
@@ -139,6 +142,23 @@ def _cmd_build(args: argparse.Namespace) -> int:
 def _cmd_font_scan(args: argparse.Namespace) -> int:
     slots = scan_gfx_fonts(args.gfx, args.ffdec)
     print(json.dumps([slot.__dict__ for slot in slots], ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_font_replace(args: argparse.Namespace) -> int:
+    replacements: dict[int, str] = {}
+    for specification in args.slot:
+        identifier, separator, font_file = specification.partition("=")
+        if not separator or not identifier.isdigit() or not font_file:
+            raise ValueError(f"invalid --slot value {specification!r}; expected ID=FONT_FILE")
+        replacements[int(identifier)] = font_file
+    output = replace_font_slots(
+        args.gfx,
+        args.output_gfx,
+        replacements,
+        ffdec_cli=args.ffdec,
+    )
+    print(output)
     return 0
 
 
@@ -224,6 +244,12 @@ def build_parser() -> argparse.ArgumentParser:
     font_scan.add_argument("gfx")
     font_scan.add_argument("--ffdec", required=True)
     font_scan.set_defaults(func=_cmd_font_scan)
+    font_replace = font_sub.add_parser("replace")
+    font_replace.add_argument("gfx")
+    font_replace.add_argument("--output-gfx", required=True)
+    font_replace.add_argument("--ffdec", required=True)
+    font_replace.add_argument("--slot", action="append", required=True, help="FONT_ID=FONT_FILE")
+    font_replace.set_defaults(func=_cmd_font_replace)
 
     texture = sub.add_parser("texture", help="inspect or replace DDS textures")
     texture_sub = texture.add_subparsers(dest="texture_command", required=True)

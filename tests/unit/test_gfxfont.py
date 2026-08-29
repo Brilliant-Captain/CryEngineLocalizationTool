@@ -3,9 +3,13 @@ from __future__ import annotations
 import pytest
 
 from cryengine_localization.adapters.gfxfont import (
+    FontCoverage,
     GfxFormatError,
+    GfxToolError,
     build_font_replace_command,
+    inspect_font_coverage,
     parse_ffdec_font_dump,
+    replace_font_slots,
     validate_gfx_bytes,
 )
 
@@ -38,3 +42,34 @@ def test_font_replace_command_has_dynamic_id_and_no_shell() -> None:
 
     assert command == ["ffdec-cli.exe", "-replace", "in.gfx", "out.gfx", "7", "font.ttf"]
 
+
+def test_replace_font_slots_rejects_unknown_slot_before_writing(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "input.gfx"
+    source.write_bytes(b"CFX" + b"\x00" * 5)
+    font = tmp_path / "font.ttf"
+    font.write_bytes(b"font")
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.scan_gfx_fonts",
+        lambda *_args, **_kwargs: (type("Slot", (), {"character_id": 7})(),),
+    )
+
+    with pytest.raises(GfxToolError, match="not found"):
+        replace_font_slots(source, tmp_path / "output.gfx", {16: font}, ffdec_cli="ffdec")
+    assert not (tmp_path / "output.gfx").exists()
+
+
+def test_inspect_font_coverage_uses_external_runner(tmp_path, monkeypatch) -> None:
+    text = tmp_path / "text.txt"
+    text.write_text("中文A", encoding="utf-8")
+
+    class Completed:
+        stdout = '{"character_count": 3, "supported_count": 2, "missing": ["文"]}'
+
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.subprocess.run",
+        lambda *args, **kwargs: Completed(),
+    )
+
+    coverage = inspect_font_coverage("font.ttf", text, python_executable="python")
+
+    assert coverage == FontCoverage(3, 2, ("文",))

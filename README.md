@@ -28,6 +28,7 @@ cry-localize catalog export C:\path\to\Assets\GameData.pak --output translations
 cry-localize apply translations.csv --dry-run
 cry-localize apply translations.csv --source-pak GameData.pak --output-pak output\GameData.pak
 cry-localize font scan gfxfontlib.gfx --ffdec C:\tools\ffdec-cli.exe
+cry-localize font replace gfxfontlib.gfx --output-gfx output\gfxfontlib.gfx --ffdec C:\tools\ffdec-cli.exe --slot 7=C:\fonts\regular.ttf --slot 16=C:\fonts\bold.ttf
 cry-localize texture inspect menu.dds
 cry-localize config preview autoexec.cfg --language english
 ```

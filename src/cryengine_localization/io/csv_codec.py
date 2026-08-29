@@ -24,7 +24,8 @@ REQUIRED_FIELDS = set(FIELDNAMES)
 def _open_text(path_or_file: str | Path | TextIO, mode: str):
     if hasattr(path_or_file, "read") or hasattr(path_or_file, "write"):
         return path_or_file, False
-    return Path(path_or_file).open(mode, encoding="utf-8", newline=""), True
+    encoding = "utf-8-sig" if "r" in mode else "utf-8"
+    return Path(path_or_file).open(mode, encoding=encoding, newline=""), True
 
 
 def export_catalog(entries: Iterable[CatalogEntry], path_or_file: str | Path | TextIO) -> None:
@@ -64,4 +65,3 @@ def import_catalog(path_or_file: str | Path | TextIO) -> list[CatalogEntry]:
     finally:
         if should_close:
             handle.close()
-

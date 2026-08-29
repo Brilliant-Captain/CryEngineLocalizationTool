@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import re
+import os
+import shutil
 import subprocess
+import tempfile
 import zlib
 from dataclasses import dataclass
+import json
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping
 
 
 class GfxFormatError(ValueError):
@@ -23,6 +27,13 @@ class FontSlot:
     character_id: int
     font_name: str
     export_name: str | None = None
+
+
+@dataclass(frozen=True)
+class FontCoverage:
+    character_count: int
+    supported_count: int
+    missing: tuple[str, ...]
 
 
 def validate_gfx_bytes(raw: bytes) -> bytes:
@@ -121,3 +132,94 @@ def subset_font(
         raise GfxToolError(f"fontTools produced no output: {result}")
     return result
 
+
+def inspect_font_coverage(
+    font_file: str | Path,
+    text_file: str | Path,
+    *,
+    python_executable: str | Path,
+) -> FontCoverage:
+    """Report missing characters using a configured fontTools interpreter."""
+
+    script = (
+        "from fontTools.ttLib import TTFont; import json,sys; "
+        "font=TTFont(sys.argv[1]); chars=sorted(set(open(sys.argv[2], encoding='utf-8').read())-{'\\n','\\r'}); "
+        "cmap={cp for table in font['cmap'].tables for cp in table.cmap}; "
+        "missing=[ch for ch in chars if ord(ch) not in cmap]; "
+        "print(json.dumps({'character_count':len(chars),'supported_count':len(chars)-len(missing),'missing':missing}, ensure_ascii=False))"
+    )
+    try:
+        completed = subprocess.run(
+            [str(python_executable), "-c", script, str(font_file), str(text_file)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(completed.stdout)
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise GfxToolError(f"font coverage inspection failed: {exc}") from exc
+    missing = tuple(str(item) for item in data.get("missing", ()))
+    return FontCoverage(
+        character_count=int(data["character_count"]),
+        supported_count=int(data["supported_count"]),
+        missing=missing,
+    )
+
+
+def replace_font_slots(
+    gfx_path: str | Path,
+    output_gfx: str | Path,
+    replacements: Mapping[int, str | Path],
+    *,
+    ffdec_cli: str | Path,
+) -> Path:
+    """Replace discovered DefineFont3 slots using FFDec, atomically.
+
+    ``replacements`` maps the actual character IDs reported by
+    :func:`scan_gfx_fonts` to TTF/OTF files. The source GFX is never modified;
+    each replacement is staged in a temporary file and the final file is
+    copied only after all FFDec invocations and a CFX validation succeed.
+    """
+
+    source = Path(gfx_path).expanduser().resolve()
+    destination = Path(output_gfx).expanduser().resolve()
+    if source == destination:
+        raise ValueError("output GFX must differ from input GFX")
+    if not replacements:
+        raise ValueError("at least one font replacement is required")
+    slots = {slot.character_id for slot in scan_gfx_fonts(source, ffdec_cli)}
+    unknown = sorted(set(replacements) - slots)
+    if unknown:
+        raise GfxToolError(f"font slot(s) not found in GFX: {unknown}")
+    for font_file in replacements.values():
+        if not Path(font_file).expanduser().is_file():
+            raise FileNotFoundError(font_file)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_paths: list[Path] = []
+    current = source
+    try:
+        for character_id, font_file in sorted(replacements.items()):
+            fd, name = tempfile.mkstemp(
+                prefix=f".{destination.name}.{character_id}.",
+                suffix=".gfx.partial",
+                dir=destination.parent,
+            )
+            os.close(fd)
+            stage = Path(name)
+            temporary_paths.append(stage)
+            command = build_font_replace_command(
+                ffdec_cli, current, stage, character_id, font_file
+            )
+            try:
+                subprocess.run(command, check=True, capture_output=True, text=True)
+            except (OSError, subprocess.CalledProcessError) as exc:
+                raise GfxToolError(f"FFDec font replacement failed for ID {character_id}: {exc}") from exc
+            if not stage.is_file() or stage.stat().st_size == 0:
+                raise GfxToolError(f"FFDec produced no GFX output for ID {character_id}")
+            current = stage
+        validate_gfx_bytes(current.read_bytes())
+        shutil.copy2(current, destination)
+    finally:
+        for path in temporary_paths:
+            path.unlink(missing_ok=True)
+    return destination
