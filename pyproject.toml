@@ -4,13 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cryengine-localization"
-version = "0.3.0"
+version = "0.3.2"
 description = "Safe, source-preserving localization tools for CryEngine projects"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "CryEngine Localization Contributors" }]
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Brilliant-Captain/CryEngineLocalizationTool"
+Issues = "https://github.com/Brilliant-Captain/CryEngineLocalizationTool/issues"
+Releases = "https://github.com/Brilliant-Captain/CryEngineLocalizationTool/releases"
 
 [project.optional-dependencies]
 test = ["pytest>=7.4"]

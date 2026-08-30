@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.3.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.3.2`。工具只处理 CryEngine 项目和 ZIP 风格 PAK。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 

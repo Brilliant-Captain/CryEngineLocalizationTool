@@ -20,6 +20,8 @@ python -m pip install -e ".[build]"
 
 内置 `en-US`/`zh-CN` 语言资源会打包进 EXE；用户还可以在 EXE 同级 `locales\` 目录放置自定义 JSON 语言包，无需重新编译。
 
-公开仓库和 Release 发布前应确认工作树干净，且未跟踪用户工作目录或商业资源。`release\` 默认被 `.gitignore` 忽略。
+创建版本标签前应运行测试和 `git diff --check`，并确认工作树干净。`release\`、用户工作目录和商业资源由 `.gitignore` 排除，不应加入 Git 历史。
+
+推送 annotated tag 后，应确认 Actions 中的 build 与 release job 均成功，并核对 Release 中两个 EXE 的大小和 `SHA256SUMS.json`。工作流支持重复运行：已有 Release 会更新资产，新标签会创建 Release。
 
 EXE 不包含游戏资源、字体或 FFDec。用户仍需在 GUI 中选择自己的 PAK/CSV，并按适配器文档配置 FFDec。未配置代码签名证书时，Windows SmartScreen 可能显示“未知发布者”；发布者应在 Release 页面提供 SHA-256，并可在自己的 CI 中增加 Authenticode 签名步骤。

@@ -2,14 +2,16 @@
 
 安全、可回滚的 CryEngine 本地化工具。GUI 工作台与 CLI 共享同一套核心和项目 profile，适用于通用 CryEngine 项目；War of Rights、Scaleform GFX 字体和 DDS 贴图都是可选适配器。
 
+Windows 用户可以从 [GitHub Releases](https://github.com/Brilliant-Captain/CryEngineLocalizationTool/releases) 下载窗口版 `CryEngineLocalization.exe`、控制台版 `cry-localize.exe` 和 SHA-256 清单。
+
 ## 范围与安全
 
 - 只处理 CryEngine 项目和 ZIP 风格 PAK；不提供 Unreal 或其它引擎适配器。
-- 商业游戏 PAK、解包目录、用户字体和构建产物都是本地输入，禁止提交到仓库。
+- 仓库不包含商业游戏 PAK、解包目录、用户字体或本机构建产物。
 - 默认执行 dry-run；修改游戏安装前必须生成带 SHA-256 的备份。
 - 官方 `Localization/english/` 路径不会被重复覆盖，避免引擎加载冲突。
 
-## 开发
+## 从源码运行
 
 ```powershell
 python -m pip install -e ".[test,fonts,textures]"
@@ -17,7 +19,7 @@ python -m pytest -q
 cry-localize --help
 ```
 
-核心图像编码使用 Python 标准库；`fonts` extra 提供 fontTools，`textures` extra 为 PNG/PSD 等额外格式提供 Pillow。GFX 写回仍需要用户本机的 FFDec CLI（不可将其商业/反编译工具打进仓库）；`cry-localize tools doctor` 会自动探测解释器和工具。工具路径通过命令行参数或环境配置显式传入，不会把用户机器路径写入 manifest 或源代码。
+核心图像编码使用 Python 标准库；`fonts` extra 提供 fontTools，`textures` extra 为 PNG/PSD 等额外格式提供 Pillow。GFX 写回需要单独安装 FFDec CLI；`cry-localize tools doctor` 会自动探测解释器和工具。工具路径通过命令行参数或环境配置显式传入，不会写入 manifest 或源代码。
 
 ## CLI 示例
 
@@ -45,7 +47,7 @@ cry-localize rollback install.json
 cry-localize gui
 ```
 
-`apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。War of Rights 的直接安装、配置备份和字体/贴图依赖说明见 `docs/adapters/war-of-rights.md`。
+`apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。War of Rights 的加载约定、配置备份和字体/贴图依赖说明见 [适配器文档](docs/adapters/war-of-rights.md)。
 
 `CryEngineLocalization.exe` 是完整的 Tkinter 工作台；`cry-localize.exe` 是同一套源码构建的 console CLI。两者都支持通用 project profile；在无图形环境时使用 CLI。
 
@@ -60,7 +62,5 @@ cry-localize gui
 界面默认使用简体中文，其他语言可通过外部 JSON 语言包添加；见 [GUI 界面本地化指南](docs/ui-localization.md)。
 
 字体全量/子集流程见 [字体流程指南](docs/fonts.md)。
-
-
 
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。

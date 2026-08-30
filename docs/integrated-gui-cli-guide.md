@@ -1,6 +1,6 @@
 # CryEngine 一体化 GUI/CLI 使用指南
 
-本工具面向通用 CryEngine 项目。GUI 与 CLI 共用同一套核心逻辑和项目 profile；不自动选择游戏目录，也不假设 War of Rights、PAK 文件名或进程名。你的项目路径、语言、overlay 策略和外部工具路径都由 profile 明确提供。
+本工具面向通用 CryEngine 项目。GUI 与 CLI 共用同一套核心逻辑和项目 profile；不自动选择游戏目录，也不假设 War of Rights、PAK 文件名或进程名。项目路径、语言、overlay 策略和外部工具路径都由 profile 明确提供。
 
 ## 1. 两个入口
 

@@ -37,3 +37,6 @@ def test_release_workflow_builds_executable_only_from_source() -> None:
     assert "release/" in workflow
     assert "Get-ChildItem" in workflow
     assert "GH_REPO: ${{ github.repository }}" in workflow
+    assert "gh release view" in workflow
+    assert "gh release upload" in workflow
+    assert "--clobber" in workflow

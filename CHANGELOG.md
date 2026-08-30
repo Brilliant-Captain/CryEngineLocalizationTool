@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed repository discovery in the GitHub Actions release job.
+- Made release uploads safe to repeat when an existing tag is rebuilt.
+- Removed internal execution artifacts from the public documentation set.
+
+## 0.3.1
+
+- Fixed Windows release builds by creating and using the project virtual environment in CI.
+
 ## 0.3.0
 
 - Added a generic JSON project profile shared by GUI and CLI.

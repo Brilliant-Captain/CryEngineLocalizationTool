@@ -1,10 +1,10 @@
 # GUI 操作教程（通用 CryEngine 项目）
 
-本教程按真实 CryEngine 项目的验证流程编写。文中的 `<GAME_ROOT>`、`<SOURCE_PAK>`、`<UI_PAK>`、`<WORK_ROOT>`、`<FFDEC_CLI>` 和 `<FONT_FILE>` 都是占位符，请替换为你自己的路径。不要把源 PAK、字体或游戏目录复制进 Git 仓库。
+本教程按真实 CryEngine 项目的验证流程编写。文中的 `<GAME_ROOT>`、`<SOURCE_PAK>`、`<UI_PAK>`、`<WORK_ROOT>`、`<FFDEC_CLI>` 和 `<FONT_FILE>` 都是占位符，应替换为实际路径。源 PAK、字体和游戏目录应保留在仓库之外。
 
 ## 0. 准备
 
-你需要一个 CryEngine 源 PAK；如果处理字体，还需要 FFDec 的命令行程序 `ffdec-cli.exe` 和一个 TTF/OTF 字体。发布 EXE 已内置 fontTools，覆盖率检查和子集生成默认不需要额外 Python；GUI 中的“fontTools 自定义 Python（可选）”只在你想使用自己的 Python 环境时填写。
+准备一个 CryEngine 源 PAK；处理字体时还需要 FFDec 命令行程序 `ffdec-cli.exe` 和一个 TTF/OTF 字体。发布 EXE 已内置 fontTools，覆盖率检查和子集生成默认不需要额外 Python；仅在使用自定义 Python 环境时填写 GUI 中的“fontTools 自定义 Python（可选）”。
 
 ## 1. 翻译流程
 
