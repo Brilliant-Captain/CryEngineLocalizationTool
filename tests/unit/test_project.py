@@ -15,3 +15,15 @@ def test_identify_cryengine_project_by_cryproject_assets_and_paks(tmp_path) -> N
     assert info.has_cryproject is True
     assert info.has_assets is True
 
+
+def test_identify_localization_only_cryengine_resource_set(tmp_path) -> None:
+    localization = tmp_path / "localization"
+    localization.mkdir()
+    (localization / "english_xml.pak").write_bytes(b"fixture")
+    (localization / "HUD_Font_LocFont.gfx").write_bytes(b"GFX fixture")
+
+    info = identify_project(tmp_path)
+
+    assert info.engine == "CryEngine"
+    assert info.confidence > 0
+    assert info.pak_files == (localization / "english_xml.pak",)

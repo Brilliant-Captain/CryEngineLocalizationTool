@@ -9,7 +9,9 @@ from cryengine_localization.adapters.pak import (
     DuplicateEntryError,
     UnsafeEntryPathError,
     build_pak,
+    extract_pak,
     normalize_entry_path,
+    read_entry,
     scan_pak,
 )
 
@@ -48,3 +50,25 @@ def test_build_rejects_duplicate_normalized_paths(tmp_path) -> None:
     with pytest.raises(DuplicateEntryError):
         build_pak({"a.txt": b"one", "A.TXT": b"two"}, tmp_path / "dup.pak")
 
+
+@pytest.mark.parametrize("compression", [zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED])
+def test_read_and_extract_accept_local_header_backslashes(tmp_path, compression) -> None:
+    path = tmp_path / "legacy.pak"
+    entry_name = "localization/english/text.xml"
+    payload = b"<Workbook />"
+    with zipfile.ZipFile(path, "w", compression=compression) as archive:
+        archive.writestr(entry_name, payload)
+
+    raw = bytearray(path.read_bytes())
+    name_offset = 30
+    local_name = entry_name.replace("/", "\\").encode("ascii")
+    raw[name_offset : name_offset + len(local_name)] = local_name
+    path.write_bytes(raw)
+
+    with zipfile.ZipFile(path) as archive, pytest.raises(zipfile.BadZipFile):
+        archive.read(entry_name)
+
+    assert read_entry(path, entry_name) == payload
+    output = tmp_path / "extracted"
+    assert extract_pak(path, output) == (output / "localization" / "english" / "text.xml",)
+    assert (output / "localization" / "english" / "text.xml").read_bytes() == payload

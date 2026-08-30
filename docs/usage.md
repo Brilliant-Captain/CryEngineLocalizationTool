@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.3.2`。工具只处理 CryEngine 项目和 ZIP 风格 PAK。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.3.2` 及后续兼容更新。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 
@@ -62,6 +62,13 @@ cry-localize pak extract <GAME_ROOT>\Assets\UI.pak <TEMP_ROOT>\UI --match gfxfon
 ```powershell
 cry-localize catalog export <GAME_ROOT>\Assets\GameData.pak --output work\translations.csv
 ```
+
+目录导出会读取两类资源：
+
+- JSON：提取 `Localizations` 的 key/value 或通用字符串叶节点。
+- SpreadsheetML XML：按表头识别 `KEY` 或 `AUDIO_FILENAME`、`ORIGINAL TEXT` 和 `TRANSLATED TEXT`。已存在且不同于原文的译文会进入 CSV 的 `translation` 列；与原文相同的单元格视为空译文。
+
+构建 XML PAK 时只更新 `TRANSLATED TEXT` 单元格，保留工作簿中的 key、原文、上下文和其它元数据。原文哈希不匹配时会停止写回。
 
 CSV 列含义：
 
@@ -187,6 +194,8 @@ cry-localize font scan <TEMP_ROOT>\UI\Libs\UI\exported_files\gfxfontlib.gfx --ff
 ```
 
 War of Rights 当前验证过的主菜单槽位是 ID 7（`Type No. 12 WF`）和 ID 16（`Type No. 2 WF`）。不要把旧脚本中的 ID 10/2 当成固定值，必须以扫描结果为准。
+
+字体扫描同时接受压缩 `CFX` 和旧式 `GFX` Scaleform 容器；两种格式都由 FFDec 的实际 `DefineFont3`/`ExportAssets` 输出确定字体 ID 和导出名。
 
 ### 5.2 覆盖率和子集
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added SpreadsheetML XML catalog extraction and translation-cell writeback.
+- Added safe reads for legacy CryEngine PAKs whose local headers use backslashes.
+- Added Scaleform `GFX` container font scanning alongside compressed `CFX` files.
+- Added low-confidence discovery for localization-only CryEngine resource sets.
+
 ## 0.3.2
 
 - Fixed repository discovery in the GitHub Actions release job.

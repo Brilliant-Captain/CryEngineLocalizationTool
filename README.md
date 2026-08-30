@@ -6,7 +6,7 @@ Windows 用户可以从 [GitHub Releases](https://github.com/Brilliant-Captain/C
 
 ## 范围与安全
 
-- 只处理 CryEngine 项目和 ZIP 风格 PAK；不提供 Unreal 或其它引擎适配器。
+- 只处理 CryEngine 项目和 ZIP 风格 PAK；支持 JSON 以及旧式 Excel SpreadsheetML XML 本地化表，不提供 Unreal 或其它引擎适配器。
 - 仓库不包含商业游戏 PAK、解包目录、用户字体或本机构建产物。
 - 默认执行 dry-run；修改游戏安装前必须生成带 SHA-256 的备份。
 - 官方 `Localization/english/` 路径不会被重复覆盖，避免引擎加载冲突。
@@ -47,7 +47,7 @@ cry-localize rollback install.json
 cry-localize gui
 ```
 
-`apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。War of Rights 的加载约定、配置备份和字体/贴图依赖说明见 [适配器文档](docs/adapters/war-of-rights.md)。
+`apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。旧式 CryEngine PAK 中中央目录 `/` 与本地头 `\` 的路径差异会在安全规范化、大小和 CRC 校验后兼容读取。War of Rights 的加载约定、配置备份和字体/贴图依赖说明见 [适配器文档](docs/adapters/war-of-rights.md)。
 
 `CryEngineLocalization.exe` 是完整的 Tkinter 工作台；`cry-localize.exe` 是同一套源码构建的 console CLI。两者都支持通用 project profile；在无图形环境时使用 CLI。
 

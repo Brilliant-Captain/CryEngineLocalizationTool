@@ -38,12 +38,30 @@ def identify_project(path: str | Path) -> ProjectInfo:
         raise NotADirectoryError(root)
     project_files = sorted(root.glob("*.cryproject"))
     assets = root / "Assets"
-    pak_files = tuple(sorted(assets.glob("*.pak"))) if assets.is_dir() else ()
+    asset_paks = tuple(sorted(assets.glob("*.pak"))) if assets.is_dir() else ()
+    localization_dirs = [
+        child
+        for child in root.iterdir()
+        if child.is_dir() and child.name.casefold() in {"localization", "localisation"}
+    ]
+    localization_paks = tuple(
+        sorted(path for directory in localization_dirs for path in directory.glob("*.pak"))
+    )
+    pak_files = tuple(sorted({*asset_paks, *localization_paks}))
     has_cryproject = bool(project_files)
     has_assets = assets.is_dir()
     score = (0.55 if has_cryproject else 0.0) + (0.25 if has_assets else 0.0)
-    if pak_files:
+    if asset_paks:
         score += 0.20
+    if localization_paks:
+        score += 0.35
+        has_loose_localization = any(
+            any(directory.glob(pattern))
+            for directory in localization_dirs
+            for pattern in ("*.xml", "*.gfx")
+        )
+        if has_loose_localization:
+            score += 0.10
     if not (has_cryproject or has_assets or pak_files):
         return ProjectInfo(root, "Unknown", 0.0, False, False, ())
     return ProjectInfo(
@@ -55,4 +73,3 @@ def identify_project(path: str | Path) -> ProjectInfo:
         pak_files=pak_files,
         engine_version=_engine_version(project_files[0]) if project_files else None,
     )
-

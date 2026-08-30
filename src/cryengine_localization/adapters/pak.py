@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import binascii
+import bz2
 import os
+import struct
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path, PurePosixPath
 from typing import Mapping
 
@@ -25,6 +29,10 @@ class UnsafeEntryPathError(PakError, ValueError):
 
 class DuplicateEntryError(PakError, ValueError):
     """Two entries normalize to the same case-insensitive path."""
+
+
+_LOCAL_FILE_HEADER = struct.Struct("<4s5H3L2H")
+_LOCAL_FILE_SIGNATURE = b"PK\x03\x04"
 
 
 def normalize_entry_path(name: str) -> str:
@@ -93,6 +101,86 @@ def scan_pak(path: str | Path) -> PakArchive:
     return PakArchive(path=pak_path, entries=tuple(entries))
 
 
+def _read_legacy_member(source: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes:
+    """Read a member whose local header differs only by path separators.
+
+    Some CryEngine PAK writers store POSIX separators in the central directory
+    and Windows separators in the local header. Python's ``zipfile`` rejects
+    that mismatch even though both names normalize to the same safe path.
+    """
+
+    if source.fp is None:
+        raise PakFormatError("PAK archive is closed")
+    source.fp.seek(info.header_offset)
+    header = source.fp.read(_LOCAL_FILE_HEADER.size)
+    if len(header) != _LOCAL_FILE_HEADER.size:
+        raise PakFormatError(f"truncated local header for {info.filename!r}")
+    fields = _LOCAL_FILE_HEADER.unpack(header)
+    if fields[0] != _LOCAL_FILE_SIGNATURE:
+        raise PakFormatError(f"invalid local header for {info.filename!r}")
+    flags = fields[2]
+    compression = fields[3]
+    name_length = fields[9]
+    extra_length = fields[10]
+    local_name_bytes = source.fp.read(name_length)
+    source.fp.seek(extra_length, os.SEEK_CUR)
+    encoding = "utf-8" if flags & 0x800 else "cp437"
+    try:
+        local_name = local_name_bytes.decode(encoding)
+    except UnicodeDecodeError as exc:
+        raise PakFormatError(f"invalid local entry name for {info.filename!r}") from exc
+    if normalize_entry_path(local_name) != normalize_entry_path(info.filename):
+        raise PakFormatError(
+            f"local and central entry names differ: {local_name!r} != {info.filename!r}"
+        )
+    if flags & 0x1:
+        raise PakFormatError(f"encrypted PAK entries are unsupported: {info.filename!r}")
+    if compression != info.compress_type:
+        raise PakFormatError(f"local compression differs for {info.filename!r}")
+    compressed = source.fp.read(info.compress_size)
+    if len(compressed) != info.compress_size:
+        raise PakFormatError(f"truncated payload for {info.filename!r}")
+    try:
+        if compression == zipfile.ZIP_STORED:
+            payload = compressed
+        elif compression == zipfile.ZIP_DEFLATED:
+            payload = zlib.decompress(compressed, -zlib.MAX_WBITS)
+        elif compression == zipfile.ZIP_BZIP2:
+            payload = bz2.decompress(compressed)
+        else:
+            raise PakFormatError(
+                f"unsupported legacy PAK compression {compression} for {info.filename!r}"
+            )
+    except (OSError, EOFError, zlib.error) as exc:
+        raise PakFormatError(f"cannot decompress {info.filename!r}") from exc
+    if len(payload) != info.file_size:
+        raise PakFormatError(f"uncompressed size mismatch for {info.filename!r}")
+    if binascii.crc32(payload) & 0xFFFFFFFF != info.CRC:
+        raise PakFormatError(f"CRC mismatch for {info.filename!r}")
+    return payload
+
+
+def _read_member(source: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes:
+    try:
+        return source.read(info)
+    except zipfile.BadZipFile as exc:
+        if "File name in directory" not in str(exc) or "header" not in str(exc):
+            raise PakFormatError(f"cannot read PAK entry {info.filename!r}") from exc
+        return _read_legacy_member(source, info)
+
+
+def read_pak_entries(path: str | Path) -> dict[str, bytes]:
+    """Read all validated entries keyed by normalized archive path."""
+
+    archive = scan_pak(path)
+    payload: dict[str, bytes] = {}
+    with _open_zip(archive.path) as source:
+        infos = {info.filename: info for info in source.infolist() if not info.is_dir()}
+        for entry in archive.entries:
+            payload[entry.path] = _read_member(source, infos[entry.source_name])
+    return payload
+
+
 def read_entry(path: str | Path, entry_path: str) -> bytes:
     """Read one normalized entry after validating the whole archive."""
 
@@ -102,7 +190,8 @@ def read_entry(path: str | Path, entry_path: str) -> bytes:
     if match is None:
         raise KeyError(normalized)
     with _open_zip(archive.path) as source:
-        return source.read(match.source_name)
+        info = next(item for item in source.infolist() if item.filename == match.source_name)
+        return _read_member(source, info)
 
 
 def extract_pak(
@@ -126,6 +215,7 @@ def extract_pak(
     pattern = re.compile(match, re.IGNORECASE) if match else None
     written: list[Path] = []
     with _open_zip(archive.path) as source:
+        infos = {info.filename: info for info in source.infolist() if not info.is_dir()}
         by_path = {entry.path: entry for entry in archive.entries}
         for normalized, entry in by_path.items():
             if pattern and not pattern.search(normalized):
@@ -138,7 +228,7 @@ def extract_pak(
             if destination.exists() and not overwrite:
                 continue
             destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(source.read(entry.source_name))
+            destination.write_bytes(_read_member(source, infos[entry.source_name]))
             written.append(destination)
     return tuple(written)
 
@@ -186,4 +276,3 @@ def build_pak(entries: Mapping[str, bytes | bytearray | memoryview | str | Path]
         temporary.unlink(missing_ok=True)
         raise
     return destination
-

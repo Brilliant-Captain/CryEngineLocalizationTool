@@ -24,7 +24,6 @@ from cryengine_localization.adapters.textures import (
 )
 from cryengine_localization.adapters.war_of_rights import preview_language_config, write_language_config
 from cryengine_localization.core.apply import apply_catalog_to_pak, plan_translation_changes
-from cryengine_localization.core.catalog import catalog_from_json_bytes
 from cryengine_localization.core.manifest import build_manifest, sha256_file, write_manifest
 from cryengine_localization.core.install import (
     InstallItem,
@@ -39,6 +38,7 @@ from cryengine_localization.core.tools import discover_tools
 from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
 from cryengine_localization.core.workflow import (
     build_profile,
+    catalog_from_pak,
     export_profile_catalog,
     install_profile,
     plan_profile_changes,
@@ -58,23 +58,6 @@ def _print_json(value: object) -> None:
     except (LookupError, UnicodeEncodeError):
         text = json.dumps(value, ensure_ascii=True, indent=2)
     sys.stdout.write(text + "\n")
-
-
-def _catalog_from_pak(path: str | Path):
-    archive = scan_pak(path)
-    rows = []
-    from zipfile import ZipFile
-
-    with ZipFile(archive.path, "r") as source:
-        payload = {entry.path: source.read(entry.source_name) for entry in archive.entries}
-    for entry in archive.entries:
-        if not entry.path.casefold().endswith(".json"):
-            continue
-        try:
-            rows.extend(catalog_from_json_bytes(entry.path, payload[entry.path]))
-        except (UnicodeDecodeError, ValueError):
-            continue
-    return rows
 
 
 def _cmd_identify(args: argparse.Namespace) -> int:
@@ -124,7 +107,7 @@ def _cmd_pak_build(args: argparse.Namespace) -> int:
 
 
 def _cmd_catalog_export(args: argparse.Namespace) -> int:
-    entries = _catalog_from_pak(args.path)
+    entries = catalog_from_pak(args.path)
     export_catalog(entries, args.output)
     print(f"exported {len(entries)} rows to {Path(args.output).resolve()}")
     return 0

@@ -90,9 +90,15 @@ def apply_catalog_to_pak(
 ) -> tuple[TranslationChange, ...]:
     """Write a translated PAK to a new path, leaving the source untouched."""
 
-    from cryengine_localization.adapters.pak import build_pak, normalize_entry_path, scan_pak
+    from cryengine_localization.adapters.pak import (
+        build_pak,
+        normalize_entry_path,
+        read_pak_entries,
+        scan_pak,
+    )
     from cryengine_localization.io.json_localization import dump_json, parse_json_relaxed
     from cryengine_localization.core.catalog import catalog_from_json
+    from cryengine_localization.io.spreadsheetml import apply_catalog_to_spreadsheetml_bytes
 
     if Path(source_pak).expanduser().resolve() == Path(output_pak).expanduser().resolve():
         raise ValueError("output PAK must differ from source PAK")
@@ -108,32 +114,35 @@ def apply_catalog_to_pak(
     unknown_paths = sorted(set(by_path) - archive_paths)
     if unknown_paths:
         raise ValueError("translation source path is absent from PAK: " + ", ".join(unknown_paths))
-    payload: dict[str, bytes] = {}
-    from zipfile import ZipFile
-
-    with ZipFile(archive.path, "r") as source:
-        for archive_entry in archive.entries:
-            raw = source.read(archive_entry.source_name)
-            path_entries = by_path.get(archive_entry.path, [])
-            if path_entries and archive_entry.path.casefold().endswith(".json"):
-                data = parse_json_relaxed(raw)
-                current_entries = catalog_from_json(archive_entry.path, data)
-                current_by_id = {item.resource_id: item for item in current_entries}
-                current_by_hash: dict[tuple[str, str], list[CatalogEntry]] = {}
-                for item in current_entries:
-                    current_by_hash.setdefault((item.text_key, item.original_hash), []).append(item)
-                for requested in path_entries:
-                    current = current_by_id.get(requested.resource_id)
-                    # Compatibility with catalogs exported before duplicate-key
-                    # IDs gained a #occurrence suffix.
-                    if current is None:
-                        candidates = current_by_hash.get((requested.text_key, requested.original_hash), [])
-                        current = candidates[0] if candidates else None
-                    if current is None:
-                        raise ValueError(f"translation resource is absent from source: {requested.resource_id}")
-                    if current.original_hash != requested.original_hash:
-                        raise ValueError(f"source changed since catalog export: {requested.resource_id}")
-                raw = dump_json(apply_catalog_to_json(data, path_entries))
-            payload[archive_entry.path] = raw
+    payload = read_pak_entries(archive.path)
+    for archive_entry in archive.entries:
+        raw = payload[archive_entry.path]
+        path_entries = by_path.get(archive_entry.path, [])
+        if path_entries and archive_entry.path.casefold().endswith(".json"):
+            data = parse_json_relaxed(raw)
+            current_entries = catalog_from_json(archive_entry.path, data)
+            current_by_id = {item.resource_id: item for item in current_entries}
+            current_by_hash: dict[tuple[str, str], list[CatalogEntry]] = {}
+            for item in current_entries:
+                current_by_hash.setdefault((item.text_key, item.original_hash), []).append(item)
+            for requested in path_entries:
+                current = current_by_id.get(requested.resource_id)
+                # Compatibility with catalogs exported before duplicate-key
+                # IDs gained a #occurrence suffix.
+                if current is None:
+                    candidates = current_by_hash.get((requested.text_key, requested.original_hash), [])
+                    current = candidates[0] if candidates else None
+                if current is None:
+                    raise ValueError(f"translation resource is absent from source: {requested.resource_id}")
+                if current.original_hash != requested.original_hash:
+                    raise ValueError(f"source changed since catalog export: {requested.resource_id}")
+            raw = dump_json(apply_catalog_to_json(data, path_entries))
+        elif path_entries and archive_entry.path.casefold().endswith(".xml"):
+            raw = apply_catalog_to_spreadsheetml_bytes(
+                archive_entry.path, raw, path_entries
+            )
+        elif path_entries:
+            raise ValueError(f"unsupported translation resource: {archive_entry.path}")
+        payload[archive_entry.path] = raw
     build_pak(payload, output_pak)
     return changes

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from zipfile import ZipFile
 
 from cryengine_localization import __version__
-from cryengine_localization.adapters.pak import build_pak, scan_pak
+from cryengine_localization.adapters.pak import build_pak, read_pak_entries, scan_pak
 from cryengine_localization.core.apply import TranslationChange, apply_catalog_to_pak, plan_translation_changes
 from cryengine_localization.core.catalog import catalog_from_json_bytes
 from cryengine_localization.core.install import (
@@ -23,20 +22,21 @@ from cryengine_localization.core.install import (
 from cryengine_localization.core.manifest import build_manifest, sha256_file, write_manifest
 from cryengine_localization.core.profile import ProfileError, ProjectProfile
 from cryengine_localization.io.csv_codec import export_catalog, import_catalog
+from cryengine_localization.io.spreadsheetml import catalog_from_spreadsheetml_bytes
 
 
 def catalog_from_pak(path: str | Path):
-    """Extract catalog rows from every readable JSON entry in a PAK."""
+    """Extract catalog rows from JSON and SpreadsheetML entries in a PAK."""
 
     archive = scan_pak(path)
+    payload = read_pak_entries(archive.path)
     rows = []
-    with ZipFile(archive.path, "r") as source:
-        payload = {entry.path: source.read(entry.source_name) for entry in archive.entries}
     for entry in archive.entries:
-        if not entry.path.casefold().endswith(".json"):
-            continue
         try:
-            rows.extend(catalog_from_json_bytes(entry.path, payload[entry.path]))
+            if entry.path.casefold().endswith(".json"):
+                rows.extend(catalog_from_json_bytes(entry.path, payload[entry.path]))
+            elif entry.path.casefold().endswith(".xml"):
+                rows.extend(catalog_from_spreadsheetml_bytes(entry.path, payload[entry.path]))
         except (UnicodeDecodeError, ValueError):
             continue
     return rows

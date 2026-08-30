@@ -6,12 +6,14 @@ import pytest
 
 from cryengine_localization.adapters.gfxfont import (
     FontCoverage,
+    FontSlot,
     GfxFormatError,
     GfxToolError,
     build_font_replace_command,
     inspect_font_coverage,
     parse_ffdec_font_dump,
     replace_font_slots,
+    scan_gfx_fonts,
     subset_font,
     validate_gfx_bytes,
 )
@@ -38,6 +40,24 @@ def test_parse_ffdec_dump_discovers_font_slots_and_exports() -> None:
 def test_gfx_validation_rejects_non_cfx() -> None:
     with pytest.raises(GfxFormatError):
         validate_gfx_bytes(b"not-gfx")
+
+
+def test_gfx_validation_and_scan_accept_gfx_container(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "legacy.gfx"
+    raw = b"GFX" + b"\x00" * 9
+    path.write_bytes(raw)
+
+    class Completed:
+        stdout = 'DefineFont3 (chid: 1, fn: "Noto Sans")\nExportAssets (chid: 1, exp: "Font_Body")'
+        stderr = ""
+
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.subprocess.run",
+        lambda *args, **kwargs: Completed(),
+    )
+
+    assert validate_gfx_bytes(raw) == raw
+    assert scan_gfx_fonts(path, "ffdec-cli.exe") == (FontSlot(1, "Noto Sans", "Font_Body"),)
 
 
 def test_font_replace_command_has_dynamic_id_and_no_shell() -> None:

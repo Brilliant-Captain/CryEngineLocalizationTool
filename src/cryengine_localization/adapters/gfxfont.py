@@ -1,4 +1,4 @@
-"""Scaleform/CFX font inspection and explicit external-tool integration."""
+"""Scaleform GFX/CFX font inspection and external-tool integration."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Mapping
 
 
 class GfxFormatError(ValueError):
-    """Input is not a valid CFX GFX file."""
+    """Input is not a supported Scaleform GFX/CFX file."""
 
 
 class GfxToolError(RuntimeError):
@@ -37,12 +37,16 @@ class FontCoverage:
 
 
 def validate_gfx_bytes(raw: bytes) -> bytes:
-    if len(raw) < 9 or raw[:3] != b"CFX":
-        raise GfxFormatError("not a CFX GFX file")
-    try:
-        return zlib.decompress(raw[8:])
-    except zlib.error as exc:
-        raise GfxFormatError("invalid compressed CFX payload") from exc
+    if len(raw) < 8:
+        raise GfxFormatError("not a supported GFX/CFX file")
+    if raw[:3] == b"GFX":
+        return raw
+    if raw[:3] == b"CFX":
+        try:
+            return zlib.decompress(raw[8:])
+        except zlib.error as exc:
+            raise GfxFormatError("invalid compressed CFX payload") from exc
+    raise GfxFormatError("not a supported GFX/CFX file")
 
 
 _FONT_RE = re.compile(r'DefineFont3\s*\(chid:\s*(\d+),\s*fn:\s*"([^"]+)"\)')
@@ -246,7 +250,7 @@ def replace_font_slots(
     ``replacements`` maps the actual character IDs reported by
     :func:`scan_gfx_fonts` to TTF/OTF files. The source GFX is never modified;
     each replacement is staged in a temporary file and the final file is
-    copied only after all FFDec invocations and a CFX validation succeed.
+    copied only after all FFDec invocations and a GFX/CFX validation succeed.
     """
 
     source = Path(gfx_path).expanduser().resolve()
