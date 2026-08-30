@@ -53,8 +53,18 @@ jobs:
         run: |
           $files = @(Get-ChildItem -LiteralPath .\release -File | ForEach-Object { $_.FullName })
           if ($files.Count -eq 0) { throw "No release files were produced" }
-          & gh release view "${{ github.ref_name }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseExists = $false
+          $previousErrorActionPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = "SilentlyContinue"
+            & gh release view "${{ github.ref_name }}" 2> $null
+            $releaseExists = ($LASTEXITCODE -eq 0)
+          } catch {
+            $releaseExists = $false
+          } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+          }
+          if ($releaseExists) {
             & gh release upload "${{ github.ref_name }}" @files --clobber
           } else {
             & gh release create "${{ github.ref_name }}" @files --generate-notes
