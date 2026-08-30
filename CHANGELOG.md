@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Added SpreadsheetML XML catalog extraction and translation-cell writeback.
 - Added safe reads for legacy CryEngine PAKs whose local headers use backslashes.
 - Added Scaleform `GFX` container font scanning alongside compressed `CFX` files.
 - Added low-confidence discovery for localization-only CryEngine resource sets.
+- Added best-effort engine version discovery from `.cryproject` and `CrySystem.dll` metadata.
+- Moved `original_hash` to the final CSV column so source and translation text stay adjacent.
 
 ## 0.3.2
 

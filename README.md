@@ -51,6 +51,8 @@ cry-localize gui
 
 `CryEngineLocalization.exe` 是完整的 Tkinter 工作台；`cry-localize.exe` 是同一套源码构建的 console CLI。两者都支持通用 project profile；在无图形环境时使用 CLI。
 
+`identify` 会分别报告精确引擎版本、版本证据来源和代际提示。`.cryproject` 版本优先；完整 Windows 游戏目录可读取 `CrySystem.dll` 文件版本；只有旧式 XML/GFX 资源时仅提示 `CryEngine 2/3-era`，不会猜测精确版本号。
+
 需要独立 Windows 程序时，参见 [Windows 发布说明](docs/releasing.md)。GitHub Release 会提供不含游戏资源的 `CryEngineLocalization.exe`、`cry-localize.exe` 和 SHA-256 清单。
 
 完整的安装、GUI、CSV、War of Rights overlay、字体、回滚和故障排除步骤见 [详细使用手册](docs/usage.md)。

@@ -31,6 +31,34 @@ def test_csv_roundtrip_preserves_edge_text_and_utf8(tmp_path) -> None:
     assert "你好" not in path.read_text(encoding="utf-8")
 
 
+def test_csv_places_translation_next_to_original_and_hash_last() -> None:
+    output = StringIO()
+
+    export_catalog([_entry()], output)
+    header = next(csv.reader(StringIO(output.getvalue())))
+
+    assert header == [
+        "resource_id",
+        "source_path",
+        "text_key",
+        "original_text",
+        "translation",
+        "status",
+        "original_hash",
+    ]
+
+
+def test_import_accepts_previous_column_order() -> None:
+    source = StringIO(
+        "resource_id,source_path,text_key,original_text,original_hash,translation,status\n"
+        "x.json:key,x.json,key,Original,hash,Translation,active\n"
+    )
+
+    assert import_catalog(source) == [
+        CatalogEntry("x.json:key", "x.json", "key", "Original", "hash", "Translation", "active")
+    ]
+
+
 def test_import_changes_translation_only() -> None:
     source = [_entry()]
     rows = [dict(_entry().__dict__, translation="你好")]
@@ -48,4 +76,3 @@ def test_import_rejects_changed_original_columns() -> None:
 
     with pytest.raises(ValueError, match="original_text"):
         merge_translations(source, [row])
-

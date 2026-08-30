@@ -71,6 +71,8 @@ def _cmd_identify(args: argparse.Namespace) -> int:
             "has_assets": info.has_assets,
             "pak_files": [str(path) for path in info.pak_files],
             "engine_version": info.engine_version,
+            "engine_version_source": info.engine_version_source,
+            "engine_generation_hint": info.engine_generation_hint,
         }
     )
     return 0

@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.3.2` 及后续兼容更新。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.4.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 
@@ -57,6 +57,12 @@ cry-localize pak extract <GAME_ROOT>\Assets\UI.pak <TEMP_ROOT>\UI --match gfxfon
 
 `identify` 输出 CryEngine 置信度和 PAK 列表。`extract` 的输出根目录必须是临时目录或用户明确指定的工作目录，工具会拒绝路径遍历。
 
+版本识别输出包含：
+
+- `engine_version`：从 `.cryproject` 或 Windows `CrySystem.dll` 文件版本取得的最佳可用版本。
+- `engine_version_source`：版本证据文件；空值表示没有可靠版本来源。
+- `engine_generation_hint`：无法取得精确版本时的保守代际提示。旧式 `_xml.pak`/GFX 资源只标记为 `CryEngine 2/3-era`，不作为精确版本。
+
 ### 3.2 导出和编辑翻译表
 
 ```powershell
@@ -78,9 +84,9 @@ CSV 列含义：
 | `source_path` | 否 | PAK 内部 JSON 路径 |
 | `text_key` | 否 | CryEngine `Localizations[].key` 或嵌套路径 |
 | `original_text` | 否 | 导出时的原文 |
-| `original_hash` | 否 | 原文 UTF-8 SHA-256 |
 | `translation` | 是 | 译文；空值表示不替换 |
 | `status` | 否 | `active/new/stale/orphaned/invalid` |
+| `original_hash` | 否 | 原文 UTF-8 SHA-256；位于最后一列，避免隔开原文和译文 |
 
 不要修改原文列、ID 或哈希。译文中的 `{name}`、`%s` 等占位符必须与原文完全匹配。HTML 标签可以翻译文字，但不要删除引擎需要的占位符。原文本身为空的更新占位项可以保持空白，工具会跳过空译文。
 

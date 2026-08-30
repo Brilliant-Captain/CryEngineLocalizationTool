@@ -14,9 +14,9 @@ FIELDNAMES = (
     "source_path",
     "text_key",
     "original_text",
-    "original_hash",
     "translation",
     "status",
+    "original_hash",
 )
 REQUIRED_FIELDS = set(FIELDNAMES)
 

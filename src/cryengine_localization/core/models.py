@@ -36,4 +36,5 @@ class ProjectInfo:
     has_assets: bool
     pak_files: tuple[Path, ...]
     engine_version: str | None = None
-
+    engine_version_source: str | None = None
+    engine_generation_hint: str | None = None
