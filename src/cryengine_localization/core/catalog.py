@@ -51,7 +51,27 @@ def _walk_strings(value: Any, path: str = "") -> Iterable[tuple[str, str]]:
 def catalog_from_json(source_path: str, data: Any) -> list[CatalogEntry]:
     """Extract text leaves while keeping source path and stable keys."""
 
-    return [_entry(source_path, key, text) for key, text in _walk_strings(data) if key]
+    leaves = [(key, text) for key, text in _walk_strings(data) if key]
+    counts: dict[str, int] = {}
+    for key, _text in leaves:
+        counts[key] = counts.get(key, 0) + 1
+    seen: dict[str, int] = {}
+    entries: list[CatalogEntry] = []
+    for key, text in leaves:
+        seen[key] = seen.get(key, 0) + 1
+        resource_id = f"{source_path}:{key}"
+        if counts[key] > 1:
+            resource_id += f"#{seen[key]}"
+        entries.append(
+            CatalogEntry(
+                resource_id=resource_id,
+                source_path=source_path,
+                text_key=key,
+                original_text=text,
+                original_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            )
+        )
+    return entries
 
 
 def catalog_from_json_bytes(source_path: str, raw: bytes) -> list[CatalogEntry]:
@@ -62,4 +82,3 @@ def catalog_from_json_bytes(source_path: str, raw: bytes) -> list[CatalogEntry]:
 
 def with_translation(entry: CatalogEntry, translation: str) -> CatalogEntry:
     return replace(entry, translation=translation)
-

@@ -1,4 +1,4 @@
-# PyInstaller one-file, windowed build for the Tkinter GUI.
+# PyInstaller one-file, console build for the generic CLI.
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_submodules
 project_root = Path(SPEC).resolve().parents[1]
 
 a = Analysis(
-    [str(project_root / "scripts" / "gui_entry.py")],
+    [str(project_root / "scripts" / "cli_entry.py")],
     pathex=[str(project_root / "src")],
     binaries=[],
     datas=[(str(project_root / "src" / "cryengine_localization" / "locales"), "cryengine_localization/locales")],
@@ -24,11 +24,11 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="CryEngineLocalization",
+    name="cry-localize",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
 )

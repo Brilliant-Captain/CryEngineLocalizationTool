@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.2.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.3.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 
@@ -15,7 +15,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-`fonts` 安装 fontTools，`textures` 安装 Pillow。PNG/PPM→DXT5 编码不依赖 Pillow；GFX 写回仍需要用户自行取得 FFDec CLI。可以把 FFDec 加入 PATH，或设置：
+源码环境中，`fonts` extra 安装 fontTools，`textures` extra 安装 Pillow。发布 EXE 已内置 fontTools；PNG/PPM→DXT5 编码不依赖 Pillow；GFX 写回仍需要用户自行取得 FFDec CLI。可以把 FFDec 加入 PATH，或设置：
 
 ```powershell
 $env:FFDEC_CLI = <FFDEC_CLI>
@@ -29,23 +29,21 @@ cry-localize tools doctor
 
 ### 使用独立 EXE
 
-从 GitHub Release 下载 `CryEngineLocalization.exe` 和 `SHA256SUMS.json`，先核对 SHA-256。EXE 是 one-file Tkinter GUI，不包含任何游戏资源、字体或 FFDec。双击 EXE 即可打开窗口；若 Windows SmartScreen 提示未知发布者，请核对哈希后再决定是否运行。
+从 GitHub Release 下载 `CryEngineLocalization.exe`、`cry-localize.exe` 和 `SHA256SUMS.json`，先核对 SHA-256。前者是 one-file Tkinter GUI，后者是同一套源码构建的 console CLI；两者都不包含游戏资源、字体或 FFDec。双击 GUI 即可打开窗口；需要批处理时直接运行 CLI。
 
 ## 2. GUI 工作流
 
 1. 启动 `CryEngineLocalization.exe`，或运行 `cry-localize gui`。
 2. 选择源 PAK，例如 `Assets\GameData.pak`。
-3. 先用 CLI 导出 CSV（GUI 当前主要负责 dry-run/build）：
-
-   ```powershell
-   cry-localize catalog export <GAME_ROOT>\Assets\GameData.pak --output translations.csv
-   ```
-
+3. 在 GUI 的 Translation 页点击 `Export CSV` 导出文本目录；如果目标 CSV 已存在，必须明确确认才会覆盖。
 4. 在表格中只填写 `translation` 列，保存为 UTF-8 CSV。
-5. 在 GUI 选择源 PAK、CSV、输出 PAK 和 manifest，填写 `zh-CN`。
-6. 先点击 Dry-run，确认变更数量和原文；再点击 Build PAK + Manifest。
-7. 生成的 PAK 应使用排序靠后的文件名，例如 `zzz_WoR_CN_Localization.pak`。
-8. GUI 不会自动覆盖游戏文件；确认无误后使用第 5 节的安装事务。
+5. 先点击 Dry-run，确认变更数量和原文；再点击 Build Translation PAK + Manifest。
+6. 字体、PAK 检查和安装/回滚分别在对应页签执行。
+7. GUI 不会自动覆盖游戏文件；确认无误后使用第 5 节的安装事务。
+
+完整的通用 profile 和 GUI/CLI 一体化流程见 [一体化使用指南](integrated-gui-cli-guide.md)。
+
+按实测步骤编写的通用 GUI 教程见 [GUI 操作教程](gui-operation-tutorial.md)。
 
 ## 3. CLI 基本流程
 
@@ -77,7 +75,7 @@ CSV 列含义：
 | `translation` | 是 | 译文；空值表示不替换 |
 | `status` | 否 | `active/new/stale/orphaned/invalid` |
 
-不要修改原文列、ID 或哈希。译文中的 `{name}`、`%s` 等占位符必须与原文完全匹配。HTML 标签可以翻译文字，但不要删除引擎需要的占位符。
+不要修改原文列、ID 或哈希。译文中的 `{name}`、`%s` 等占位符必须与原文完全匹配。HTML 标签可以翻译文字，但不要删除引擎需要的占位符。原文本身为空的更新占位项可以保持空白，工具会跳过空译文。
 
 游戏更新后重新导出目录，并在应用前比较 `original_hash`。哈希变化会变成 `stale` 并清空旧译文，删除的资源变成 `orphaned`，不会静默写回旧文本。
 
@@ -85,6 +83,9 @@ CSV 列含义：
 
 ```powershell
 cry-localize apply work\translations.csv --dry-run
+
+# War of Rights overlay: preview only English-path entries
+cry-localize apply work\translations.csv --dry-run --english-only
 
 cry-localize build <GAME_ROOT>\Assets\GameData.pak work\translations.csv `
   --output-pak work\zzz_WoR_CN_Localization.pak `
@@ -156,7 +157,7 @@ cry-localize install `
 --file work\gfxfontlib.patched.gfx=Assets\Libs\UI\exported_files\gfxfontlib.gfx
 ```
 
-安装事务会检查 War of Rights 进程、拒绝越界目标、备份已存在文件，并用临时文件原子替换。失败时会自动恢复已经写入的项目。
+安装事务会检查 profile 中配置的目标进程、拒绝越界目标、备份已存在文件，并用临时文件原子替换。失败时会自动恢复已经写入的项目。
 
 ### 4.4 启动和验证
 
@@ -237,13 +238,13 @@ cry-localize texture replace <SOURCE_PAK> <INTERNAL_DDS_PATH> work\menu.dds `
 
 ### `fontTools is unavailable`
 
-安装字体 extra：
+源码环境安装字体 extra：
 
 ```powershell
 python -m pip install -e ".[fonts]"
 ```
 
-也可以通过 `--python` 指定带 `fontTools.subset` 的 Python。
+发布 EXE 默认使用内置 fontTools；源码环境如果未安装 fontTools，或者希望使用自定义环境，可以通过 `--python` 指定带 `fontTools.subset` 的 Python。
 
 ### Steam 初始化失败
 
@@ -255,5 +256,5 @@ python -m pip install -e ".[fonts]"
 
 ```powershell
 git ls-files | Select-String -Pattern '\.(pak|gfx|dds|ttf|otf|ttc)$'
-rg -n -i '<DRIVE>:\\Users|steamapps|AppData|<GAME_ROOT>' --glob '!.git/**' .
+rg -n -i '<USER_HOME>|steamapps|AppData|<GAME_ROOT>' --glob '!.git/**' .
 ```

@@ -18,4 +18,16 @@ reports/
 *.partial
 *.bak
 *.log
+*.exe
+*.dll
+*.jar
+*.7z
+*.zip
+*.rar
+*.csv
+.env
+.env.*
+work/
+*_Work/
+*_work/
 user-config.toml

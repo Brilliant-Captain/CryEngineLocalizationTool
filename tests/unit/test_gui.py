@@ -20,4 +20,6 @@ def test_gui_build_args_only_contains_explicit_paths() -> None:
         "manifest.json",
         "--language",
         "zh-CN",
+        "--overlay-mode",
+        "standalone",
     ]

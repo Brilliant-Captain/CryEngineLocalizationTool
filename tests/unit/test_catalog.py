@@ -25,3 +25,14 @@ def test_nested_json_strings_are_extractable() -> None:
 
     assert {entry.text_key for entry in entries} == {"menu.title", "items[0]"}
 
+
+def test_duplicate_localization_keys_get_stable_resource_ids() -> None:
+    entries = catalog_from_json(
+        "bindings.json",
+        {"Localizations": [{"key": "same", "value": "One"}, {"key": "same", "value": "Two"}]},
+    )
+
+    assert [entry.resource_id for entry in entries] == [
+        "bindings.json:same#1",
+        "bindings.json:same#2",
+    ]

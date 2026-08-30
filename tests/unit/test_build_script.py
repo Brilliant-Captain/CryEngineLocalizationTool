@@ -11,3 +11,6 @@ def test_build_script_writes_basename_only_checksum() -> None:
 
     assert "Split-Path -Leaf" in script
     assert "SHA256SUMS.json" in script
+    assert "CryEngineLocalizationCLI.spec" in script
+    assert "cry-localize.exe" in script
+    assert "fontTools" in script

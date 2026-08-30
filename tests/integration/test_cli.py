@@ -90,3 +90,30 @@ def test_cli_install_dry_run_does_not_write_game_root(tmp_path, capsys) -> None:
     capsys.readouterr()
     assert not (game / "Assets" / "patch.pak").exists()
     assert not record.exists()
+
+
+def test_cli_apply_english_only_filters_non_english_rows(tmp_path, capsys) -> None:
+    csv_path = tmp_path / "translations.csv"
+    export_catalog(
+        [
+            CatalogEntry("Localization/english/MainMenu.json:x", "Localization/english/MainMenu.json", "x", "X", __import__('hashlib').sha256(b"X").hexdigest(), "中文"),
+            CatalogEntry("Localization/Finnish/MainMenu.json:y", "Localization/Finnish/MainMenu.json", "y", "Y", __import__('hashlib').sha256(b"Y").hexdigest(), "芬兰语"),
+        ],
+        csv_path,
+    )
+
+    assert main(["apply", str(csv_path), "--dry-run", "--english-only"]) == 0
+    output = capsys.readouterr().out
+    assert "Localization/english/MainMenu.json" in output
+    assert "Localization/Finnish/MainMenu.json" not in output
+
+
+def test_cli_gui_passes_interface_language(monkeypatch) -> None:
+    received: dict[str, str | None] = {}
+    monkeypatch.setattr(
+        "cryengine_localization.gui.launch_gui",
+        lambda *, ui_language=None: received.setdefault("ui_language", ui_language),
+    )
+
+    assert main(["gui", "--ui-language", "en-US"]) == 0
+    assert received["ui_language"] == "en-US"

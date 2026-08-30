@@ -60,6 +60,22 @@ def test_install_aborts_when_game_process_is_running(tmp_path, monkeypatch) -> N
     assert not (game / "Assets" / "new.pak").exists()
 
 
+def test_install_default_process_names_are_game_agnostic(tmp_path, monkeypatch) -> None:
+    game = tmp_path / "game"
+    game.mkdir()
+    source = tmp_path / "new.pak"
+    source.write_bytes(b"new")
+    received: list[tuple[str, ...]] = []
+
+    def capture(process_names=()):
+        received.append(tuple(process_names))
+
+    monkeypatch.setattr("cryengine_localization.core.install.ensure_game_not_running", capture)
+    install_files(game, [InstallItem(source, "Assets/new.pak")], backup_dir=tmp_path / "backup")
+
+    assert received == [()]
+
+
 def test_rollback_rejects_tampered_backup(tmp_path, monkeypatch) -> None:
     game = tmp_path / "game"
     game.mkdir()

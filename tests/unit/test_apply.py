@@ -70,3 +70,20 @@ def test_apply_pak_rejects_unsafe_or_unknown_source_path(tmp_path) -> None:
         apply_catalog_to_pak(str(pak), [unsafe], str(tmp_path / "unsafe.pak"))
     with pytest.raises(ValueError, match="absent from PAK"):
         apply_catalog_to_pak(str(pak), [unknown], str(tmp_path / "unknown.pak"))
+
+
+def test_apply_duplicate_keys_matches_original_text_individually() -> None:
+    data = {
+        "Localizations": [
+            {"key": "same", "value": "One"},
+            {"key": "same", "value": "Two"},
+        ]
+    }
+    entries = [
+        CatalogEntry("x.json:same", "x.json", "same", "One", "hash-one", "一"),
+        CatalogEntry("x.json:same", "x.json", "same", "Two", "hash-two", "二"),
+    ]
+
+    output = apply_catalog_to_json(data, entries)
+
+    assert [item["value"] for item in output["Localizations"]] == ["一", "二"]

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cryengine-localization"
-version = "0.2.0"
+version = "0.3.0"
 description = "Safe, source-preserving localization tools for CryEngine projects"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,9 @@ cry-localize = "cryengine_localization.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+cryengine_localization = ["locales/*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

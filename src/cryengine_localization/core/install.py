@@ -54,7 +54,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def ensure_game_not_running(process_names: Iterable[str] = ("WarOfRights.exe", "War of Rights.exe")) -> None:
+def ensure_game_not_running(process_names: Iterable[str] = ()) -> None:
     """Fail closed if a configured game process is listed by the OS."""
 
     names = {Path(name).name.casefold() for name in process_names}
@@ -140,7 +140,7 @@ def install_files(
     items: Iterable[InstallItem],
     *,
     backup_dir: str | Path,
-    process_names: Iterable[str] = ("WarOfRights.exe", "War of Rights.exe"),
+    process_names: Iterable[str] = (),
 ) -> InstallationRecord:
     root = Path(game_root).expanduser().resolve()
     planned = plan_install(root, items)

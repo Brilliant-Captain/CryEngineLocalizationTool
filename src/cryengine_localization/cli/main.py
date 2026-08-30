@@ -36,7 +36,28 @@ from cryengine_localization.core.install import (
     write_install_record,
 )
 from cryengine_localization.core.tools import discover_tools
+from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
+from cryengine_localization.core.workflow import (
+    build_profile,
+    export_profile_catalog,
+    install_profile,
+    plan_profile_changes,
+    plan_profile_install,
+    rollback_profile,
+)
 from cryengine_localization.io.csv_codec import export_catalog, import_catalog
+
+
+def _print_json(value: object) -> None:
+    """Print JSON safely on Windows consoles using legacy code pages."""
+
+    text = json.dumps(value, ensure_ascii=False, indent=2)
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+    except (LookupError, UnicodeEncodeError):
+        text = json.dumps(value, ensure_ascii=True, indent=2)
+    sys.stdout.write(text + "\n")
 
 
 def _catalog_from_pak(path: str | Path):
@@ -58,19 +79,16 @@ def _catalog_from_pak(path: str | Path):
 
 def _cmd_identify(args: argparse.Namespace) -> int:
     info = identify_project(args.path)
-    print(
-        json.dumps(
-            {
-                "path": str(info.path),
-                "engine": info.engine,
-                "confidence": info.confidence,
-                "has_cryproject": info.has_cryproject,
-                "has_assets": info.has_assets,
-                "pak_files": [str(path) for path in info.pak_files],
-                "engine_version": info.engine_version,
-            },
-            ensure_ascii=False,
-        )
+    _print_json(
+        {
+            "path": str(info.path),
+            "engine": info.engine,
+            "confidence": info.confidence,
+            "has_cryproject": info.has_cryproject,
+            "has_assets": info.has_assets,
+            "pak_files": [str(path) for path in info.pak_files],
+            "engine_version": info.engine_version,
+        }
     )
     return 0
 
@@ -114,13 +132,15 @@ def _cmd_catalog_export(args: argparse.Namespace) -> int:
 
 def _cmd_apply(args: argparse.Namespace) -> int:
     entries = import_catalog(args.csv)
+    if args.english_only:
+        entries = [
+            entry
+            for entry in entries
+            if entry.source_path.casefold().startswith("localization/english/")
+        ]
     changes = plan_translation_changes(entries)
     if args.dry_run:
-        print(
-            json.dumps(
-                [change.__dict__ for change in changes], ensure_ascii=False, indent=2
-            )
-        )
+        _print_json([change.__dict__ for change in changes])
         return 0
     if not args.source_pak or not args.output_pak:
         raise ValueError("non-dry-run apply requires --source-pak and --output-pak")
@@ -131,6 +151,12 @@ def _cmd_apply(args: argparse.Namespace) -> int:
 
 def _cmd_build(args: argparse.Namespace) -> int:
     entries = import_catalog(args.csv)
+    if args.overlay_mode == "english-path-overlay":
+        entries = [
+            entry
+            for entry in entries
+            if entry.source_path.casefold().startswith("localization/english/")
+        ]
     output = Path(args.output_pak).expanduser().resolve()
     source = Path(args.source_pak).expanduser().resolve()
     changes = apply_catalog_to_pak(str(source), entries, str(output))
@@ -161,7 +187,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
 
 def _cmd_font_scan(args: argparse.Namespace) -> int:
     slots = scan_gfx_fonts(args.gfx, args.ffdec)
-    print(json.dumps([slot.__dict__ for slot in slots], ensure_ascii=False, indent=2))
+    _print_json([slot.__dict__ for slot in slots])
     return 0
 
 
@@ -196,7 +222,7 @@ def _cmd_font_subset(args: argparse.Namespace) -> int:
         args.font,
         args.text,
         args.output_font,
-        python_executable=_font_python(args.python),
+        python_executable=args.python,
     )
     print(output)
     return 0
@@ -206,15 +232,15 @@ def _cmd_font_coverage(args: argparse.Namespace) -> int:
     coverage = inspect_font_coverage(
         args.font,
         args.text,
-        python_executable=_font_python(args.python),
+        python_executable=args.python,
     )
-    print(json.dumps(coverage.__dict__, ensure_ascii=False, indent=2))
+    _print_json(coverage.__dict__)
     return 0
 
 
 def _cmd_texture_inspect(args: argparse.Namespace) -> int:
     metadata = parse_dds_header(Path(args.dds).read_bytes())
-    print(json.dumps(metadata.__dict__, ensure_ascii=False, indent=2))
+    _print_json(metadata.__dict__)
     return 0
 
 
@@ -239,7 +265,7 @@ def _cmd_texture_replace(args: argparse.Namespace) -> int:
 def _cmd_config_preview(args: argparse.Namespace) -> int:
     text = Path(args.config).read_text(encoding="utf-8")
     preview = preview_language_config(text, args.language)
-    print(json.dumps({"after": preview.after, "diff": list(preview.diff)}, ensure_ascii=False, indent=2))
+    _print_json({"after": preview.after, "diff": list(preview.diff)})
     return 0
 
 
@@ -251,7 +277,7 @@ def _cmd_config_write(args: argparse.Namespace) -> int:
 
 def _cmd_tools_doctor(args: argparse.Namespace) -> int:
     report = discover_tools(ffdec=args.ffdec)
-    print(json.dumps({name: info.as_dict() for name, info in report.items()}, ensure_ascii=False, indent=2))
+    _print_json({name: info.as_dict() for name, info in report.items()})
     return 0
 
 
@@ -271,28 +297,24 @@ def _cmd_install(args: argparse.Namespace) -> int:
     items = _parse_install_items(args.file)
     if args.dry_run:
         planned = plan_install(args.game_root, items)
-        print(
-            json.dumps(
-                [
-                    {
-                        "source": str(item.source),
-                        "destination": str(item.destination),
-                        "destination_existed": item.destination_existed,
-                        "backup_sha256": item.backup_sha256,
-                        "installed_sha256": item.installed_sha256,
-                    }
-                    for item in planned
-                ],
-                ensure_ascii=False,
-                indent=2,
-            )
+        _print_json(
+            [
+                {
+                    "source": str(item.source),
+                    "destination": str(item.destination),
+                    "destination_existed": item.destination_existed,
+                    "backup_sha256": item.backup_sha256,
+                    "installed_sha256": item.installed_sha256,
+                }
+                for item in planned
+            ]
         )
         return 0
     record = install_files(
         args.game_root,
         items,
         backup_dir=args.backup_dir,
-        process_names=args.process_name or ("WarOfRights.exe", "War of Rights.exe"),
+        process_names=tuple(args.process_name),
     )
     write_install_record(record, args.record)
     print(f"installed {len(record.items)} files")
@@ -307,10 +329,80 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_profile_init(args: argparse.Namespace) -> int:
+    path = Path(args.output).expanduser().resolve()
+    if path.exists() and not args.overwrite:
+        raise FileExistsError(f"profile already exists; pass --overwrite to replace: {path}")
+    save_profile(ProjectProfile(), path, validate=False)
+    print(f"wrote {path}")
+    return 0
+
+
+def _cmd_profile_validate(args: argparse.Namespace) -> int:
+    profile = load_profile(args.profile)
+    _print_json(profile.to_dict())
+    return 0
+
+
+def _cmd_profile_show(args: argparse.Namespace) -> int:
+    profile = load_profile(args.profile, validate=False)
+    _print_json(profile.to_dict())
+    return 0
+
+
+def _cmd_workflow_export_csv(args: argparse.Namespace) -> int:
+    profile = load_profile(args.profile)
+    output, count = export_profile_catalog(profile, overwrite=args.overwrite)
+    print(f"exported {count} rows to {output}")
+    return 0
+
+
+def _cmd_workflow_dry_run(args: argparse.Namespace) -> int:
+    changes = plan_profile_changes(load_profile(args.profile))
+    _print_json([change.__dict__ for change in changes])
+    return 0
+
+
+def _cmd_workflow_build(args: argparse.Namespace) -> int:
+    output, manifest, _changes = build_profile(load_profile(args.profile))
+    print(f"wrote {output}")
+    print(f"manifest {manifest}")
+    return 0
+
+
+def _cmd_workflow_install(args: argparse.Namespace) -> int:
+    profile = load_profile(args.profile)
+    if args.dry_run:
+        planned = plan_profile_install(profile)
+        _print_json(
+            [
+                {
+                    "source": str(item.source),
+                    "destination": str(item.destination),
+                    "destination_existed": item.destination_existed,
+                    "backup_sha256": item.backup_sha256,
+                    "installed_sha256": item.installed_sha256,
+                }
+                for item in planned
+            ]
+        )
+        return 0
+    record = install_profile(profile)
+    print(f"installed {len(record.items)} files")
+    print(f"record {Path(profile.install.record).expanduser().resolve()}")
+    return 0
+
+
+def _cmd_workflow_rollback(args: argparse.Namespace) -> int:
+    record = rollback_profile(load_profile(args.profile))
+    print(f"restored {len(record.items)} files")
+    return 0
+
+
 def _cmd_gui(args: argparse.Namespace) -> int:
     from cryengine_localization.gui import launch_gui
 
-    launch_gui()
+    launch_gui(ui_language=args.ui_language)
     return 0
 
 
@@ -346,9 +438,27 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_export.add_argument("--output", required=True)
     catalog_export.set_defaults(func=_cmd_catalog_export)
 
+    profile = sub.add_parser("profile", help="create and validate a generic project profile")
+    profile_sub = profile.add_subparsers(dest="profile_command", required=True)
+    profile_init = profile_sub.add_parser("init")
+    profile_init.add_argument("--output", required=True)
+    profile_init.add_argument("--overwrite", action="store_true")
+    profile_init.set_defaults(func=_cmd_profile_init)
+    profile_validate = profile_sub.add_parser("validate")
+    profile_validate.add_argument("profile")
+    profile_validate.set_defaults(func=_cmd_profile_validate)
+    profile_show = profile_sub.add_parser("show")
+    profile_show.add_argument("profile")
+    profile_show.set_defaults(func=_cmd_profile_show)
+
     apply = sub.add_parser("apply", help="preview or apply a translation table")
     apply.add_argument("csv")
     apply.add_argument("--dry-run", action="store_true")
+    apply.add_argument(
+        "--english-only",
+        action="store_true",
+        help="only apply Localization/english entries (recommended for War of Rights overlay)",
+    )
     apply.add_argument("--source-pak")
     apply.add_argument("--output-pak")
     apply.set_defaults(func=_cmd_apply)
@@ -444,7 +554,28 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument("record")
     rollback.set_defaults(func=_cmd_rollback)
 
+    workflow = sub.add_parser("workflow", help="run a complete workflow from a project profile")
+    workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
+    workflow_export = workflow_sub.add_parser("export-csv")
+    workflow_export.add_argument("profile")
+    workflow_export.add_argument("--overwrite", action="store_true")
+    workflow_export.set_defaults(func=_cmd_workflow_export_csv)
+    workflow_dry_run = workflow_sub.add_parser("dry-run")
+    workflow_dry_run.add_argument("profile")
+    workflow_dry_run.set_defaults(func=_cmd_workflow_dry_run)
+    workflow_build = workflow_sub.add_parser("build")
+    workflow_build.add_argument("profile")
+    workflow_build.set_defaults(func=_cmd_workflow_build)
+    workflow_install = workflow_sub.add_parser("install")
+    workflow_install.add_argument("profile")
+    workflow_install.add_argument("--dry-run", action="store_true")
+    workflow_install.set_defaults(func=_cmd_workflow_install)
+    workflow_rollback = workflow_sub.add_parser("rollback")
+    workflow_rollback.add_argument("profile")
+    workflow_rollback.set_defaults(func=_cmd_workflow_rollback)
+
     gui = sub.add_parser("gui", help="launch the optional Tkinter interface")
+    gui.add_argument("--ui-language", default="zh-CN", help="GUI locale, for example zh-CN or en-US")
     gui.set_defaults(func=_cmd_gui)
     return parser
 

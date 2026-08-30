@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from cryengine_localization.adapters.gfxfont import (
@@ -10,6 +12,7 @@ from cryengine_localization.adapters.gfxfont import (
     inspect_font_coverage,
     parse_ffdec_font_dump,
     replace_font_slots,
+    subset_font,
     validate_gfx_bytes,
 )
 
@@ -73,3 +76,31 @@ def test_inspect_font_coverage_uses_external_runner(tmp_path, monkeypatch) -> No
     coverage = inspect_font_coverage("font.ttf", text, python_executable="python")
 
     assert coverage == FontCoverage(3, 2, ("文",))
+
+
+def test_inspect_font_coverage_defaults_to_bundled_fonttools(monkeypatch) -> None:
+    expected = FontCoverage(2, 2, ())
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont._inspect_font_coverage_in_process",
+        lambda *_args: expected,
+    )
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.subprocess.run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("external Python must not run")),
+    )
+
+    assert inspect_font_coverage("font.ttf", "text.txt") == expected
+
+
+def test_subset_font_defaults_to_bundled_fonttools(monkeypatch) -> None:
+    expected = Path("subset.ttf")
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont._subset_font_in_process",
+        lambda *_args: expected,
+    )
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.subprocess.run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("external Python must not run")),
+    )
+
+    assert subset_font("font.ttf", "text.txt", "subset.ttf") == expected

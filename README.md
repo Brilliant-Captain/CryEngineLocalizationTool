@@ -1,6 +1,6 @@
 # CryEngine Localization
 
-安全、可回滚的 CryEngine 本地化工具。项目当前处于早期开发阶段，先提供可测试的 CLI 核心，再逐步接入 War of Rights、Scaleform GFX 字体和 DDS 贴图适配器。
+安全、可回滚的 CryEngine 本地化工具。GUI 工作台与 CLI 共享同一套核心和项目 profile，适用于通用 CryEngine 项目；War of Rights、Scaleform GFX 字体和 DDS 贴图都是可选适配器。
 
 ## 范围与安全
 
@@ -25,6 +25,10 @@ cry-localize --help
 cry-localize identify <PROJECT_ROOT>
 cry-localize pak list <GAME_ROOT>\Assets\GameData.pak
 cry-localize catalog export <GAME_ROOT>\Assets\GameData.pak --output translations.csv
+cry-localize profile init --output project.json
+cry-localize workflow export-csv project.json
+cry-localize workflow dry-run project.json
+cry-localize workflow build project.json
 cry-localize apply translations.csv --dry-run
 cry-localize apply translations.csv --source-pak GameData.pak --output-pak output\GameData.pak
 cry-localize font scan gfxfontlib.gfx --ffdec <FFDEC_CLI>
@@ -43,10 +47,20 @@ cry-localize gui
 
 `apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。War of Rights 的直接安装、配置备份和字体/贴图依赖说明见 `docs/adapters/war-of-rights.md`。
 
-`gui` 只是 CLI 的 Tkinter 外壳，不包含独立资源处理逻辑；在无图形环境时请使用命令行。
+`CryEngineLocalization.exe` 是完整的 Tkinter 工作台；`cry-localize.exe` 是同一套源码构建的 console CLI。两者都支持通用 project profile；在无图形环境时使用 CLI。
 
-需要独立 Windows 程序时，参见 [Windows 发布说明](docs/releasing.md)。GitHub Release 会提供不含游戏资源的 `CryEngineLocalization.exe` 和 SHA-256 清单。
+需要独立 Windows 程序时，参见 [Windows 发布说明](docs/releasing.md)。GitHub Release 会提供不含游戏资源的 `CryEngineLocalization.exe`、`cry-localize.exe` 和 SHA-256 清单。
 
 完整的安装、GUI、CSV、War of Rights overlay、字体、回滚和故障排除步骤见 [详细使用手册](docs/usage.md)。
+
+通用 GUI/CLI profile 流程见 [一体化使用指南](docs/integrated-gui-cli-guide.md)。
+
+按真实项目整理的 GUI 操作步骤见 [GUI 操作教程](docs/gui-operation-tutorial.md)。
+
+界面默认使用简体中文，其他语言可通过外部 JSON 语言包添加；见 [GUI 界面本地化指南](docs/ui-localization.md)。
+
+字体全量/子集流程见 [字体流程指南](docs/fonts.md)。
+
+
 
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。

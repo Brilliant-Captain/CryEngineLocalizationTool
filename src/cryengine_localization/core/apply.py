@@ -66,14 +66,17 @@ def apply_catalog_to_json(data: Any, entries: Iterable[CatalogEntry]) -> Any:
     output = copy.deepcopy(data)
     changes = plan_translation_changes(entries)
     if isinstance(output, dict) and isinstance(output.get("Localizations"), list):
-        by_key = {change.text_key: change for change in changes}
+        by_key: dict[tuple[str, str], list[TranslationChange]] = {}
+        for change in changes:
+            by_key.setdefault((change.text_key, change.original_text), []).append(change)
         for item in output["Localizations"]:
             if not isinstance(item, dict):
                 continue
             key = item.get("key")
-            change = by_key.get(key)
-            if change:
-                item["value"] = change.translation
+            original = item.get("value")
+            candidates = by_key.get((key, original), [])
+            if candidates:
+                item["value"] = candidates.pop(0).translation
         return output
     for change in changes:
         _set_path(output, change.text_key, change.translation)
@@ -114,12 +117,18 @@ def apply_catalog_to_pak(
             path_entries = by_path.get(archive_entry.path, [])
             if path_entries and archive_entry.path.casefold().endswith(".json"):
                 data = parse_json_relaxed(raw)
-                current_by_id = {
-                    item.resource_id: item
-                    for item in catalog_from_json(archive_entry.path, data)
-                }
+                current_entries = catalog_from_json(archive_entry.path, data)
+                current_by_id = {item.resource_id: item for item in current_entries}
+                current_by_hash: dict[tuple[str, str], list[CatalogEntry]] = {}
+                for item in current_entries:
+                    current_by_hash.setdefault((item.text_key, item.original_hash), []).append(item)
                 for requested in path_entries:
                     current = current_by_id.get(requested.resource_id)
+                    # Compatibility with catalogs exported before duplicate-key
+                    # IDs gained a #occurrence suffix.
+                    if current is None:
+                        candidates = current_by_hash.get((requested.text_key, requested.original_hash), [])
+                        current = candidates[0] if candidates else None
                     if current is None:
                         raise ValueError(f"translation resource is absent from source: {requested.resource_id}")
                     if current.original_hash != requested.original_hash:

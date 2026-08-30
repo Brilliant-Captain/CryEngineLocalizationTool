@@ -118,9 +118,12 @@ def subset_font(
     text_file: str | Path,
     output_file: str | Path,
     *,
-    python_executable: str | Path,
+    python_executable: str | Path | None = None,
 ) -> Path:
-    """Run ``fontTools.subset`` without shell interpolation."""
+    """Create a subset font using bundled fontTools or an explicit Python."""
+
+    if python_executable is None:
+        return _subset_font_in_process(font_file, text_file, output_file)
 
     command = [
         str(python_executable),
@@ -144,13 +147,50 @@ def subset_font(
     return result
 
 
+def _subset_font_in_process(
+    font_file: str | Path,
+    text_file: str | Path,
+    output_file: str | Path,
+) -> Path:
+    """Run fontTools' subset API inside the current process."""
+
+    try:
+        from fontTools import subset as font_subset
+    except ImportError as exc:
+        raise GfxToolError("bundled fontTools is unavailable; pass --python to use a custom interpreter") from exc
+    source = Path(font_file).expanduser().resolve()
+    text_path = Path(text_file).expanduser().resolve()
+    destination = Path(output_file).expanduser().resolve()
+    try:
+        characters = "".join(sorted(set(text_path.read_text(encoding="utf-8")) - {"\n", "\r"}))
+        options = font_subset.Options()
+        options.layout_features = ["*"]
+        options.glyph_names = True
+        options.symbol_cmap = True
+        options.name_IDs = ["*"]
+        font = font_subset.load_font(str(source), options)
+        subsetter = font_subset.Subsetter(options=options)
+        subsetter.populate(text=characters)
+        subsetter.subset(font)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        font_subset.save_font(font, str(destination), options)
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        raise GfxToolError(f"bundled fontTools subset failed: {exc}") from exc
+    if not destination.is_file() or destination.stat().st_size == 0:
+        raise GfxToolError(f"fontTools produced no output: {destination}")
+    return destination
+
+
 def inspect_font_coverage(
     font_file: str | Path,
     text_file: str | Path,
     *,
-    python_executable: str | Path,
+    python_executable: str | Path | None = None,
 ) -> FontCoverage:
-    """Report missing characters using a configured fontTools interpreter."""
+    """Report missing characters using bundled fontTools or a custom interpreter."""
+
+    if python_executable is None:
+        return _inspect_font_coverage_in_process(font_file, text_file)
 
     script = (
         "from fontTools.ttLib import TTFont; import json,sys; "
@@ -175,6 +215,23 @@ def inspect_font_coverage(
         supported_count=int(data["supported_count"]),
         missing=missing,
     )
+
+
+def _inspect_font_coverage_in_process(font_file: str | Path, text_file: str | Path) -> FontCoverage:
+    """Inspect cmap coverage with the bundled fontTools library."""
+
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError as exc:
+        raise GfxToolError("bundled fontTools is unavailable; pass --python to use a custom interpreter") from exc
+    try:
+        chars = sorted(set(Path(text_file).expanduser().resolve().read_text(encoding="utf-8")) - {"\n", "\r"})
+        font = TTFont(str(Path(font_file).expanduser().resolve()))
+        cmap = {codepoint for table in font["cmap"].tables for codepoint in table.cmap}
+    except (OSError, KeyError, ValueError, TypeError) as exc:
+        raise GfxToolError(f"bundled fontTools coverage inspection failed: {exc}") from exc
+    missing = tuple(character for character in chars if ord(character) not in cmap)
+    return FontCoverage(len(chars), len(chars) - len(missing), missing)
 
 
 def replace_font_slots(
