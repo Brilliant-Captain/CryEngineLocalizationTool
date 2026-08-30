@@ -19,9 +19,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Create project virtual environment
+        shell: powershell
+        run: python -m venv .venv
       - name: Install package and build tools
         shell: powershell
-        run: python -m pip install -e ".[fonts,textures]" pyinstaller
+        run: .\.venv\Scripts\python.exe -m pip install -e ".[fonts,textures,build]"
       - name: Build GUI and CLI executables
         shell: powershell
         run: .\scripts\build_exe.ps1 -OutputDir .\release

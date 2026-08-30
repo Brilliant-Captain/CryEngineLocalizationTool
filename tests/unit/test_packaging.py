@@ -29,8 +29,10 @@ def test_console_entry_and_spec_share_the_same_cli() -> None:
 def test_release_workflow_builds_executable_only_from_source() -> None:
     workflow = (ROOT / ".github" / "workflows" / "build-windows-exe.yml").read_text(encoding="utf-8")
 
-    assert "pyinstaller" in workflow
+    assert "[fonts,textures,build]" in workflow
     assert "build_exe.ps1" in workflow
+    assert "python -m venv .venv" in workflow
+    assert ".\\.venv\\Scripts\\python.exe -m pip install" in workflow
     assert "upload-artifact@v4" in workflow
     assert "release/" in workflow
     assert "Get-ChildItem" in workflow
