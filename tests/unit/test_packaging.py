@@ -36,3 +36,4 @@ def test_release_workflow_builds_executable_only_from_source() -> None:
     assert "upload-artifact@v4" in workflow
     assert "release/" in workflow
     assert "Get-ChildItem" in workflow
+    assert "GH_REPO: ${{ github.repository }}" in workflow

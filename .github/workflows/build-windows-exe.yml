@@ -49,6 +49,7 @@ jobs:
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           $files = @(Get-ChildItem -LiteralPath .\release -File | ForEach-Object { $_.FullName })
           if ($files.Count -eq 0) { throw "No release files were produced" }
