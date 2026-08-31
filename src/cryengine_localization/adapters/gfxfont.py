@@ -497,18 +497,14 @@ def replace_font_slots(
         if not Path(font_file).expanduser().is_file():
             raise FileNotFoundError(font_file)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary_paths: list[Path] = []
-    current = source
-    try:
+    # FFDec can crash when its output path is deeply nested. Keep every
+    # intermediate candidate in the system temporary directory, then copy the
+    # verified final result into the caller's requested location.
+    with tempfile.TemporaryDirectory(prefix="cryengine_ffdec_") as temporary_dir:
+        temporary = Path(temporary_dir)
+        current = source
         for character_id, font_file in sorted(replacements.items()):
-            fd, name = tempfile.mkstemp(
-                prefix=f".{destination.name}.{character_id}.",
-                suffix=".gfx.partial",
-                dir=destination.parent,
-            )
-            os.close(fd)
-            stage = Path(name)
-            temporary_paths.append(stage)
+            stage = temporary / f"slot-{character_id}.gfx"
             command = build_font_replace_command(
                 tool, current, stage, character_id, font_file
             )
@@ -521,7 +517,4 @@ def replace_font_slots(
             current = stage
         validate_gfx_bytes(current.read_bytes())
         shutil.copy2(current, destination)
-    finally:
-        for path in temporary_paths:
-            path.unlink(missing_ok=True)
     return destination

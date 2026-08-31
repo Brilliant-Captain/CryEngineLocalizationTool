@@ -85,6 +85,32 @@ def test_replace_font_slots_rejects_unknown_slot_before_writing(tmp_path, monkey
     assert not (tmp_path / "output.gfx").exists()
 
 
+def test_replace_font_slots_stages_ffdec_output_outside_destination_directory(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "input.gfx"
+    source.write_bytes(b"GFX" + b"\x00" * 9)
+    font = tmp_path / "font.ttf"
+    font.write_bytes(b"font")
+    destination = tmp_path / "deep" / "nested" / "output.gfx"
+    stages: list[Path] = []
+
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.scan_gfx_fonts",
+        lambda *_args, **_kwargs: (FontSlot(1, "Body"),),
+    )
+
+    def fake_run(command, **_kwargs):
+        stage = Path(command[3])
+        stages.append(stage)
+        stage.write_bytes(b"GFX" + b"\x00" * 9)
+
+    monkeypatch.setattr("cryengine_localization.adapters.gfxfont.subprocess.run", fake_run)
+
+    assert replace_font_slots(source, destination, {1: font}, ffdec_cli="ffdec") == destination
+    assert destination.is_file()
+    assert len(stages) == 1
+    assert stages[0].parent != destination.parent
+
+
 def test_inspect_font_coverage_uses_external_runner(tmp_path, monkeypatch) -> None:
     text = tmp_path / "text.txt"
     text.write_text("中文A", encoding="utf-8")

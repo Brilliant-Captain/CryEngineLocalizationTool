@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2
+
+- Fixed FFDec font replacement failures for deeply nested output paths by staging candidate GFX files in the system temporary directory before copying the validated result to its destination.
+- Added a regression test that verifies FFDec staging never uses the caller's destination directory.
+
 ## 0.6.1
 
 - Changed batch dry-run output to a bounded summary with ready, empty, and failed counts plus at most 100 failure details.
