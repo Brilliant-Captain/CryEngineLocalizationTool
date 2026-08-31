@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from cryengine_localization.core.models import PakArchive, PakEntry
 
@@ -177,6 +177,40 @@ def read_pak_entries(path: str | Path) -> dict[str, bytes]:
     with _open_zip(archive.path) as source:
         infos = {info.filename: info for info in source.infolist() if not info.is_dir()}
         for entry in archive.entries:
+            payload[entry.path] = _read_member(source, infos[entry.source_name])
+    return payload
+
+
+def read_pak_members(path: str | Path, entry_paths: Iterable[str]) -> dict[str, bytes]:
+    """Read selected validated archive members without inflating the whole PAK.
+
+    Keys in the returned mapping use the archive's canonical member spelling.
+    Requested paths are case-insensitive because CryEngine resource lookups are
+    case-insensitive, but duplicate requests after normalization are rejected
+    rather than silently hiding caller mistakes.
+    """
+
+    archive = scan_pak(path)
+    requested: dict[str, str] = {}
+    for raw_path in entry_paths:
+        normalized = normalize_entry_path(raw_path)
+        folded = normalized.casefold()
+        if folded in requested:
+            raise DuplicateEntryError(
+                f"duplicate requested normalized entry: {requested[folded]!r} and {raw_path!r}"
+            )
+        requested[folded] = normalized
+
+    by_folded_path = {entry.path.casefold(): entry for entry in archive.entries}
+    missing = [normalized for folded, normalized in requested.items() if folded not in by_folded_path]
+    if missing:
+        raise KeyError(", ".join(sorted(missing)))
+
+    payload: dict[str, bytes] = {}
+    with _open_zip(archive.path) as source:
+        infos = {info.filename: info for info in source.infolist() if not info.is_dir()}
+        for folded in requested:
+            entry = by_folded_path[folded]
             payload[entry.path] = _read_member(source, infos[entry.source_name])
     return payload
 

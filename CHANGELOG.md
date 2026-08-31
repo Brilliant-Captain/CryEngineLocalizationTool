@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Added full-game batch resource discovery with small active translation CSVs, report-only resource shards, and scan summaries.
+- Added source-archive provenance, War of Rights English-overlay filtering, and safe reuse of prior human translations with backups and reports.
+- Added profile, CLI, and GUI batch scan, preview, build, and translation-reuse workflows.
+- Added batch GFX/CFX font discovery and one-font replacement overlays; files without embedded DefineFont3 slots are reported and skipped safely.
+- Added compatibility for legacy localization JSON files with missing separators between adjacent object records.
+
 ## 0.4.0
 
 - Added SpreadsheetML XML catalog extraction and translation-cell writeback.

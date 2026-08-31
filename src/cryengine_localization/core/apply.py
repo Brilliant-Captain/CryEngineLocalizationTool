@@ -11,6 +11,9 @@ from cryengine_localization.core.catalog import CatalogEntry
 from cryengine_localization.core.stale import validate_translation
 
 
+REPORT_ONLY_STATUSES = frozenset({"report-only"})
+
+
 @dataclass(frozen=True)
 class TranslationChange:
     source_path: str
@@ -23,7 +26,7 @@ class TranslationChange:
 def plan_translation_changes(entries: Iterable[CatalogEntry]) -> list[TranslationChange]:
     changes: list[TranslationChange] = []
     for entry in entries:
-        if not entry.translation or entry.status in {"stale", "orphaned", "invalid"}:
+        if not entry.translation or entry.status in {"stale", "orphaned", "invalid"} | REPORT_ONLY_STATUSES:
             continue
         validate_translation(entry.original_text, entry.translation)
         changes.append(

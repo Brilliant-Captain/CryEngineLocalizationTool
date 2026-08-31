@@ -45,6 +45,7 @@ def test_csv_places_translation_next_to_original_and_hash_last() -> None:
         "translation",
         "status",
         "original_hash",
+        "source_archive",
     ]
 
 
@@ -57,6 +58,24 @@ def test_import_accepts_previous_column_order() -> None:
     assert import_catalog(source) == [
         CatalogEntry("x.json:key", "x.json", "key", "Original", "hash", "Translation", "active")
     ]
+
+
+def test_csv_roundtrip_preserves_optional_source_archive(tmp_path) -> None:
+    path = tmp_path / "translations.csv"
+    original = [
+        CatalogEntry(
+            "x.json:key",
+            "x.json",
+            "key",
+            "Original",
+            "hash",
+            source_archive="Assets/GameData.pak",
+        )
+    ]
+
+    export_catalog(original, path)
+
+    assert import_catalog(path) == original
 
 
 def test_import_changes_translation_only() -> None:

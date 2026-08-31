@@ -42,6 +42,12 @@ cry-localize pak build work\font_overlay work\font_overlay.pak
 
 不要把 FFDec GUI launcher 当作 CLI；必须填写能够接受 `-dumpSWF`/`-replace` 参数的 `ffdec-cli.exe`。
 
+## 批量替换所有发现的 GFX 字体
+
+在“批量扫描 / 构建”页填写游戏根目录、统一替换字体、字体输出 PAK 和 FFDec CLI；点击“一键构建翻译与字体 PAK”即可扫描全部 `.gfx`/`.cfx`。工具会对每个已发现的 `DefineFont3` 槽位使用同一字体，输出 PAK 内保持原始 GFX 路径与文件名。
+
+GFX 非字体文字只会作为 `report-only` 查漏项导出，批量字体功能不会改写这些文字。任何一个已发现 GFX 的替换失败都会取消最终字体 PAK，避免半成品覆盖。具体 CLI/profile 配置见[批量资源工作流](adapters/batch-resource-localization.md)。
+
 ## 旧式 GFX 安全评估与原位移植
 
 FFDec 的 `-replace` 会重建整个 GFX。旧版或预加载的 Scaleform 文件可能在游戏运行时崩溃，即使 FFDec 能重新解析输出。先执行安全评估：

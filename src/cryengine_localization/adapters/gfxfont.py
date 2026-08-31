@@ -24,6 +24,10 @@ class GfxToolError(RuntimeError):
     """FFDec or fontTools failed."""
 
 
+class GfxNoFontSlotsError(GfxToolError):
+    """FFDec read the resource but found no replaceable DefineFont3 slot."""
+
+
 @dataclass(frozen=True)
 class FontSlot:
     character_id: int
@@ -317,7 +321,7 @@ def scan_gfx_fonts(gfx_path: str | Path, ffdec_cli: str | Path | None = None) ->
         raise GfxToolError(f"FFDec font scan failed: {exc}") from exc
     slots = parse_ffdec_font_dump(completed.stdout + completed.stderr)
     if not slots:
-        raise GfxToolError("FFDec output contained no DefineFont3 slots")
+        raise GfxNoFontSlotsError("FFDec output contained no DefineFont3 slots")
     return slots
 
 

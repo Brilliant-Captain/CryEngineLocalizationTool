@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from cryengine_localization.core.profile import FontProfile, FontSlot, InstallFile, InstallProfile, ProjectProfile
+from cryengine_localization.core.profile import BatchProfile, FontProfile, FontSlot, InstallFile, InstallProfile, ProjectProfile
 
 
 def build_cli_args(
@@ -79,6 +79,16 @@ def profile_to_form(profile: ProjectProfile) -> dict[str, str]:
         "font_coverage_text": profile.font.coverage_text,
         "font_subset_output_font": profile.font.subset_output_font,
         "font_slots": ";".join(f"{slot.character_id}={slot.font_file}" for slot in profile.font.slots),
+        "batch_enabled": "true" if profile.batch.enabled else "false",
+        "batch_game_root": profile.batch.game_root,
+        "batch_catalog_csv": profile.batch.catalog_csv,
+        "batch_legacy_translation_csv": profile.batch.legacy_translation_csv,
+        "batch_scan_report": profile.batch.scan_report,
+        "batch_translation_overlay_pak": profile.batch.translation_overlay_pak,
+        "batch_manifest": profile.batch.manifest,
+        "batch_font_file": profile.batch.font_file,
+        "batch_font_overlay_pak": profile.batch.font_overlay_pak,
+        "batch_ffdec": profile.batch.ffdec,
         "install_game_root": profile.install.game_root,
         "install_backup_dir": profile.install.backup_dir,
         "install_record": profile.install.record,
@@ -117,6 +127,7 @@ def profile_from_form(values: dict[str, str]) -> ProjectProfile:
     """Build and validate a project profile from GUI form values."""
 
     enabled = values.get("font_enabled", "false").strip().casefold() in {"1", "true", "yes", "on"}
+    batch_enabled = values.get("batch_enabled", "false").strip().casefold() in {"1", "true", "yes", "on"}
     profile = ProjectProfile(
         name=values.get("name", ""),
         engine_version=values.get("engine_version", "") or None,
@@ -138,6 +149,18 @@ def profile_from_form(values: dict[str, str]) -> ProjectProfile:
             coverage_text=values.get("font_coverage_text", ""),
             subset_output_font=values.get("font_subset_output_font", ""),
             slots=_parse_slots(values.get("font_slots", "")),
+        ),
+        batch=BatchProfile(
+            enabled=batch_enabled,
+            game_root=values.get("batch_game_root", ""),
+            catalog_csv=values.get("batch_catalog_csv", ""),
+            legacy_translation_csv=values.get("batch_legacy_translation_csv", ""),
+            scan_report=values.get("batch_scan_report", ""),
+            translation_overlay_pak=values.get("batch_translation_overlay_pak", ""),
+            manifest=values.get("batch_manifest", ""),
+            font_file=values.get("batch_font_file", ""),
+            font_overlay_pak=values.get("batch_font_overlay_pak", ""),
+            ffdec=values.get("batch_ffdec", ""),
         ),
         install=InstallProfile(
             game_root=values.get("install_game_root", ""),

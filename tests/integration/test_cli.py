@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import hashlib
 import zipfile
+import csv
 
 from cryengine_localization.cli.main import main
 from cryengine_localization.adapters.swf import SWF_HEADER_SIZE, build_tag
 from cryengine_localization.core.catalog import CatalogEntry
 from cryengine_localization.io.csv_codec import export_catalog
+from cryengine_localization.core.profile import BatchProfile, ProjectProfile, save_profile
 
 
 def test_cli_identify_and_catalog_export(tmp_path, capsys) -> None:
@@ -165,3 +167,115 @@ def test_cli_font_migrate_writes_output(tmp_path, capsys) -> None:
     capsys.readouterr()
     assert output.read_bytes() != original.read_bytes()
     assert output.read_bytes() == candidate.read_bytes()
+
+
+def test_cli_batch_scan_dry_run_and_build_use_profile_paths(tmp_path, capsys) -> None:
+    game_root = tmp_path / "game"
+    assets = game_root / "Assets"
+    assets.mkdir(parents=True)
+    source = assets / "GameData.pak"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr(
+            "Localization/english/MainMenu.json",
+            '{"Localizations":[{"key":"ui_start","value":"Start"}]}',
+        )
+        archive.writestr(
+            "Localization/Finnish/MainMenu.json",
+            '{"Localizations":[{"key":"ui_start","value":"Aloita"}]}',
+        )
+        archive.writestr("Libs/UI/MainMenu.gfx", b"GFX\x08\x00\x00\x00\x00Main Menu\x00")
+    work = tmp_path / "work"
+    profile_path = tmp_path / "batch-profile.json"
+    profile = ProjectProfile(
+        name="Batch fixture",
+        language="zh-CN",
+        overlay_mode="english-path-overlay",
+        batch=BatchProfile(
+            enabled=True,
+            game_root=str(game_root),
+            catalog_csv=str(work / "all-text.csv"),
+            scan_report=str(work / "scan-report.json"),
+            translation_overlay_pak=str(work / "zzz_translation.pak"),
+            manifest=str(work / "manifest.json"),
+        ),
+    )
+    save_profile(profile, profile_path)
+
+    assert main(["workflow", "batch-scan", str(profile_path)]) == 0
+    assert "exported" in capsys.readouterr().out
+    with (work / "all-text.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows and {row["status"] for row in rows} == {"active"}
+    assert not any(row["source_path"].startswith("Localization/Finnish/") for row in rows)
+    with (work / "scan-report-parts" / "report-index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+        report_index = list(csv.DictReader(handle))
+    assert report_index and {row["resource_type"] for row in report_index} >= {"json", "gfx"}
+    writable = rows[0]
+    writable["translation"] = "开始"
+    with (work / "all-text.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+    assert main(["workflow", "batch-dry-run", str(profile_path)]) == 0
+    assert "ui_start" in capsys.readouterr().out
+    assert main(["workflow", "batch-build", str(profile_path)]) == 0
+    output = capsys.readouterr().out
+    assert "manifest" in output
+    assert (work / "zzz_translation.pak").is_file()
+    assert (work / "manifest.json").is_file()
+    with zipfile.ZipFile(work / "zzz_translation.pak") as archive:
+        assert "开始" in archive.read("Localization/english/MainMenu.json").decode("utf-8")
+
+
+def test_cli_batch_reuse_old_translations_creates_backup_and_report(tmp_path, capsys) -> None:
+    game_root = tmp_path / "game"
+    assets = game_root / "Assets"
+    assets.mkdir(parents=True)
+    with zipfile.ZipFile(assets / "GameData.pak", "w") as archive:
+        archive.writestr(
+            "Localization/english/MainMenu.json",
+            '{"Localizations":[{"key":"ui_start","value":"Start"}]}',
+        )
+    work = tmp_path / "work"
+    legacy = work / "old.csv"
+    profile_path = tmp_path / "batch-profile.json"
+    profile = ProjectProfile(
+        name="Batch reuse fixture",
+        overlay_mode="english-path-overlay",
+        batch=BatchProfile(
+            enabled=True,
+            game_root=str(game_root),
+            catalog_csv=str(work / "translations-active.csv"),
+            scan_report=str(work / "scan-report.json"),
+            translation_overlay_pak=str(work / "translation.pak"),
+            manifest=str(work / "manifest.json"),
+            legacy_translation_csv=str(legacy),
+        ),
+    )
+    save_profile(profile, profile_path)
+    assert main(["workflow", "batch-scan", str(profile_path)]) == 0
+    capsys.readouterr()
+    export_catalog(
+        [
+            CatalogEntry(
+                "Localization/english/MainMenu.json:ui_start",
+                "Localization/english/MainMenu.json",
+                "ui_start",
+                "Start",
+                hashlib.sha256(b"Start").hexdigest(),
+                "开始",
+            )
+        ],
+        legacy,
+    )
+
+    assert main(["workflow", "batch-reuse-old", str(profile_path), "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["reuse"]["copied_translations"] == 1
+    assert main(["workflow", "batch-reuse-old", str(profile_path)]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["reuse"]["copied_translations"] == 1
+    assert (work / "translations-active.before-reuse.csv").is_file()
+    assert (work / "translations-active.reuse-report.json").is_file()
+    with (work / "translations-active.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+        assert next(csv.DictReader(handle))["translation"] == "开始"

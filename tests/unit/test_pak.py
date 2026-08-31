@@ -12,6 +12,7 @@ from cryengine_localization.adapters.pak import (
     extract_pak,
     normalize_entry_path,
     read_entry,
+    read_pak_members,
     scan_pak,
 )
 
@@ -72,3 +73,24 @@ def test_read_and_extract_accept_local_header_backslashes(tmp_path, compression)
     output = tmp_path / "extracted"
     assert extract_pak(path, output) == (output / "localization" / "english" / "text.xml",)
     assert (output / "localization" / "english" / "text.xml").read_bytes() == payload
+
+
+def test_read_pak_members_reads_only_requested_normalized_entries(tmp_path) -> None:
+    path = tmp_path / "source.pak"
+    build_pak({"Localization/english/MainMenu.json": b'{"title":"Start"}', "large.bin": b"x" * 1024}, path)
+
+    assert read_pak_members(path, [r"Localization\english\MainMenu.json"]) == {
+        "Localization/english/MainMenu.json": b'{"title":"Start"}'
+    }
+
+
+def test_read_pak_members_rejects_unsafe_unknown_and_duplicate_requests(tmp_path) -> None:
+    path = tmp_path / "source.pak"
+    build_pak({"MainMenu.json": b"{}"}, path)
+
+    with pytest.raises(UnsafeEntryPathError):
+        read_pak_members(path, ["../MainMenu.json"])
+    with pytest.raises(KeyError, match="missing.json"):
+        read_pak_members(path, ["missing.json"])
+    with pytest.raises(DuplicateEntryError, match="requested"):
+        read_pak_members(path, ["MainMenu.json", r"MainMenu.json"])

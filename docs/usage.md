@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.4.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.6.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 
@@ -40,6 +40,34 @@ cry-localize tools doctor
 5. 先点击 Dry-run，确认变更数量和原文；再点击 Build Translation PAK + Manifest。
 6. 字体、PAK 检查和安装/回滚分别在对应页签执行。
 7. GUI 不会自动覆盖游戏文件；确认无误后使用第 5 节的安装事务。
+
+### 2.1 全游戏批量扫描与一键构建
+
+需要查找不在单一 `GameData.pak` 中的文本时，打开 GUI 的“批量扫描 / 构建”页：填写游戏根目录、全量 CSV、扫描报告、翻译输出 PAK 和 Manifest，点击“全量扫描并导出 CSV”。人工只编辑 CSV 的 `translation` 列；再点击“查看批量预演”和“一键构建翻译与字体 PAK”。
+
+也可使用 CLI：
+
+```powershell
+cry-localize workflow batch-scan project.json
+# 手工填写 batch.catalog_csv 的 translation 列
+cry-localize workflow batch-dry-run project.json
+cry-localize workflow batch-build project.json
+```
+
+批量扫描覆盖所有 ZIP 风格 PAK 与松散候选文件。主 CSV 只包含可直接人工翻译的 `active` 行；`scan-report-parts/report-index.csv` 列出 `report-only` 查漏分片，按 json/xml/gfx/other 分类且每份最多 10,000 行。`Localization/` 下可正常解析的 JSON 和 SpreadsheetML XML 可构建；GFX/CFX/SWF、普通/损坏 JSON、普通 XML 和普通文本中的英文只会进入 report-only 分片，绝不被自动写回。翻译 PAK 内部路径与文件名保持原始资源名称，且输出必须位于游戏目录外。完整配置字段和字体批处理限制见[批量资源工作流](adapters/batch-resource-localization.md)。
+
+War of Rights 使用 `english-path-overlay` 时，批量 CSV 仅将 `Localization/english/` 的可写行标为 `active`；其它语言目录会自动标为 `report-only`。
+
+### 2.2 复用旧翻译 CSV
+
+如果已经有旧版人工翻译表，在“批量扫描 / 构建”页填写“旧译文 CSV”，点击“复用旧译文”。工具会先备份当前 active CSV，再只复用原文哈希相同的译文；新表已有译文不会覆盖。CLI 等价操作：
+
+```powershell
+cry-localize workflow batch-reuse-old project.json --dry-run
+cry-localize workflow batch-reuse-old project.json
+```
+
+实际复用后检查同目录的 `.before-reuse.csv` 备份与 `.reuse-report.json`。报告中的重复匹配项需人工决定，不会被工具自动写入。
 
 完整的通用 profile 和 GUI/CLI 一体化流程见 [一体化使用指南](integrated-gui-cli-guide.md)。
 
@@ -87,6 +115,7 @@ CSV 列含义：
 | `translation` | 是 | 译文；空值表示不替换 |
 | `status` | 否 | `active/new/stale/orphaned/invalid` |
 | `original_hash` | 否 | 原文 UTF-8 SHA-256；位于最后一列，避免隔开原文和译文 |
+| `source_archive` | 否 | 批量扫描时的来源 PAK 相对路径；`[loose]` 表示松散文件 |
 
 不要修改原文列、ID 或哈希。译文中的 `{name}`、`%s` 等占位符必须与原文完全匹配。HTML 标签可以翻译文字，但不要删除引擎需要的占位符。原文本身为空的更新占位项可以保持空白，工具会跳过空译文。
 

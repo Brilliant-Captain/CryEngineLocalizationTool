@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from cryengine_localization import __version__
@@ -40,11 +41,15 @@ from cryengine_localization.core.install import (
 from cryengine_localization.core.tools import discover_tools
 from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
 from cryengine_localization.core.workflow import (
+    build_batch_profile,
     build_profile,
     catalog_from_pak,
+    export_batch_profile_catalog,
     export_profile_catalog,
     install_profile,
     plan_profile_changes,
+    plan_batch_profile_changes,
+    reuse_batch_profile_translations,
     plan_profile_install,
     rollback_profile,
 )
@@ -386,6 +391,48 @@ def _cmd_workflow_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_workflow_batch_scan(args: argparse.Namespace) -> int:
+    output, count, report = export_batch_profile_catalog(
+        load_profile(args.profile), overwrite=args.overwrite
+    )
+    print(f"exported {count} rows to {output}")
+    print(f"report {report}")
+    return 0
+
+
+def _cmd_workflow_batch_dry_run(args: argparse.Namespace) -> int:
+    changes = plan_batch_profile_changes(load_profile(args.profile))
+    _print_json([change.__dict__ for change in changes])
+    return 0
+
+
+def _cmd_workflow_batch_build(args: argparse.Namespace) -> int:
+    result = build_batch_profile(load_profile(args.profile))
+    print(f"wrote {result.translation.output_pak}")
+    if result.font is not None:
+        print(f"font {result.font.output_pak}")
+    print(f"manifest {result.manifest_path}")
+    return 0
+
+
+def _cmd_workflow_batch_reuse_old(args: argparse.Namespace) -> int:
+    result = reuse_batch_profile_translations(
+        load_profile(args.profile),
+        old_csv=args.old_csv,
+        dry_run=args.dry_run,
+    )
+    _print_json(
+        {
+            "dry_run": args.dry_run,
+            "catalog": str(result.catalog_path),
+            "backup": str(result.backup_path) if result.backup_path else None,
+            "report": str(result.report_path) if result.report_path else None,
+            "reuse": asdict(result.reuse),
+        }
+    )
+    return 0
+
+
 def _cmd_workflow_install(args: argparse.Namespace) -> int:
     profile = load_profile(args.profile)
     if args.dry_run:
@@ -593,6 +640,21 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_build = workflow_sub.add_parser("build")
     workflow_build.add_argument("profile")
     workflow_build.set_defaults(func=_cmd_workflow_build)
+    workflow_batch_scan = workflow_sub.add_parser("batch-scan")
+    workflow_batch_scan.add_argument("profile")
+    workflow_batch_scan.add_argument("--overwrite", action="store_true")
+    workflow_batch_scan.set_defaults(func=_cmd_workflow_batch_scan)
+    workflow_batch_dry_run = workflow_sub.add_parser("batch-dry-run")
+    workflow_batch_dry_run.add_argument("profile")
+    workflow_batch_dry_run.set_defaults(func=_cmd_workflow_batch_dry_run)
+    workflow_batch_build = workflow_sub.add_parser("batch-build")
+    workflow_batch_build.add_argument("profile")
+    workflow_batch_build.set_defaults(func=_cmd_workflow_batch_build)
+    workflow_batch_reuse = workflow_sub.add_parser("batch-reuse-old")
+    workflow_batch_reuse.add_argument("profile")
+    workflow_batch_reuse.add_argument("--old-csv")
+    workflow_batch_reuse.add_argument("--dry-run", action="store_true")
+    workflow_batch_reuse.set_defaults(func=_cmd_workflow_batch_reuse_old)
     workflow_install = workflow_sub.add_parser("install")
     workflow_install.add_argument("profile")
     workflow_install.add_argument("--dry-run", action="store_true")

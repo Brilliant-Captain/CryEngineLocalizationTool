@@ -126,6 +126,101 @@ class FontProfile:
 
 
 @dataclass(frozen=True)
+class BatchProfile:
+    """Optional settings for full-game scan and overlay build workflows."""
+
+    enabled: bool = False
+    game_root: str = ""
+    catalog_csv: str = ""
+    legacy_translation_csv: str = ""
+    scan_report: str = ""
+    translation_overlay_pak: str = ""
+    manifest: str = ""
+    font_file: str = ""
+    font_overlay_pak: str = ""
+    ffdec: str = ""
+
+    @classmethod
+    def from_dict(cls, value: Any) -> "BatchProfile":
+        data = _require_mapping(value, "batch")
+        _reject_unknown(
+            data,
+            {
+                "enabled",
+                "game_root",
+                "catalog_csv",
+                "legacy_translation_csv",
+                "scan_report",
+                "translation_overlay_pak",
+                "manifest",
+                "font_file",
+                "font_overlay_pak",
+                "ffdec",
+            },
+            "batch",
+        )
+        enabled = data.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ProfileError("batch.enabled must be a boolean")
+        result = cls(
+            enabled=enabled,
+            game_root=_require_string(data.get("game_root", ""), "batch.game_root", allow_empty=True),
+            catalog_csv=_require_string(data.get("catalog_csv", ""), "batch.catalog_csv", allow_empty=True),
+            legacy_translation_csv=_require_string(data.get("legacy_translation_csv", ""), "batch.legacy_translation_csv", allow_empty=True),
+            scan_report=_require_string(data.get("scan_report", ""), "batch.scan_report", allow_empty=True),
+            translation_overlay_pak=_require_string(data.get("translation_overlay_pak", ""), "batch.translation_overlay_pak", allow_empty=True),
+            manifest=_require_string(data.get("manifest", ""), "batch.manifest", allow_empty=True),
+            font_file=_require_string(data.get("font_file", ""), "batch.font_file", allow_empty=True),
+            font_overlay_pak=_require_string(data.get("font_overlay_pak", ""), "batch.font_overlay_pak", allow_empty=True),
+            ffdec=_require_string(data.get("ffdec", ""), "batch.ffdec", allow_empty=True),
+        )
+        return result.validate()
+
+    def validate(self) -> "BatchProfile":
+        if bool(self.font_file) != bool(self.font_overlay_pak):
+            raise ProfileError("batch.font_file and batch.font_overlay_pak must be supplied together")
+        return self
+
+    def require_scan(self) -> "BatchProfile":
+        if not self.enabled:
+            raise ProfileError("batch workflow is not enabled")
+        for value, label in (
+            (self.game_root, "batch.game_root"),
+            (self.catalog_csv, "batch.catalog_csv"),
+            (self.scan_report, "batch.scan_report"),
+        ):
+            _require_string(value, label)
+        return self
+
+    def require_dry_run(self) -> "BatchProfile":
+        self.require_scan()
+        return self
+
+    def require_build(self) -> "BatchProfile":
+        self.require_dry_run()
+        for value, label in (
+            (self.translation_overlay_pak, "batch.translation_overlay_pak"),
+            (self.manifest, "batch.manifest"),
+        ):
+            _require_string(value, label)
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "game_root": self.game_root,
+            "catalog_csv": self.catalog_csv,
+            "legacy_translation_csv": self.legacy_translation_csv,
+            "scan_report": self.scan_report,
+            "translation_overlay_pak": self.translation_overlay_pak,
+            "manifest": self.manifest,
+            "font_file": self.font_file,
+            "font_overlay_pak": self.font_overlay_pak,
+            "ffdec": self.ffdec,
+        }
+
+
+@dataclass(frozen=True)
 class InstallFile:
     """A generated file and its relative destination inside a project root."""
 
@@ -207,34 +302,38 @@ class ProjectProfile:
     ui_language: str = "zh-CN"
     overlay_mode: str = "standalone"
     font: FontProfile = field(default_factory=FontProfile)
+    batch: BatchProfile = field(default_factory=BatchProfile)
     install: InstallProfile = field(default_factory=InstallProfile)
     schema_version: int = PROFILE_SCHEMA_VERSION
 
     def validate(self, *, require_files: bool = False) -> "ProjectProfile":
         if self.schema_version != PROFILE_SCHEMA_VERSION:
             raise ProfileError(f"unsupported schema_version: {self.schema_version}")
-        for value, label in (
-            (self.name, "name"),
-            (self.source_pak, "source_pak"),
-            (self.translation_csv, "translation_csv"),
-            (self.output_pak, "output_pak"),
-            (self.manifest, "manifest"),
-            (self.language, "language"),
-        ):
+        for value, label in ((self.name, "name"), (self.language, "language")):
             _require_string(value, label)
+        if not self.batch.enabled:
+            for value, label in (
+                (self.source_pak, "source_pak"),
+                (self.translation_csv, "translation_csv"),
+                (self.output_pak, "output_pak"),
+                (self.manifest, "manifest"),
+            ):
+                _require_string(value, label)
         if self.engine_version is not None:
             _require_string(self.engine_version, "engine_version")
         if self.overlay_mode not in OVERLAY_MODES:
             raise ProfileError(f"overlay_mode must be one of: {', '.join(OVERLAY_MODES)}")
         self.font.validate()
+        self.batch.validate()
         self.install.validate()
         if require_files:
-            for value, label in (
-                (self.source_pak, "source_pak"),
-                (self.translation_csv, "translation_csv"),
-            ):
-                if not Path(value).expanduser().is_file():
-                    raise ProfileError(f"{label} does not exist: {value}")
+            if not self.batch.enabled:
+                for value, label in (
+                    (self.source_pak, "source_pak"),
+                    (self.translation_csv, "translation_csv"),
+                ):
+                    if not Path(value).expanduser().is_file():
+                        raise ProfileError(f"{label} does not exist: {value}")
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -250,6 +349,7 @@ class ProjectProfile:
             "ui_language": self.ui_language,
             "overlay_mode": self.overlay_mode,
             "font": self.font.to_dict(),
+            "batch": self.batch.to_dict(),
             "install": self.install.to_dict(),
         }
 
@@ -270,6 +370,7 @@ class ProjectProfile:
                 "ui_language",
                 "overlay_mode",
                 "font",
+                "batch",
                 "install",
             },
             "profile",
@@ -291,6 +392,7 @@ class ProjectProfile:
             ui_language=_require_string(data.get("ui_language", "zh-CN"), "ui_language", allow_empty=True),
             overlay_mode=_require_string(data.get("overlay_mode", "standalone"), "overlay_mode", allow_empty=True),
             font=FontProfile.from_dict(data.get("font", {})),
+            batch=BatchProfile.from_dict(data.get("batch", {})),
             install=InstallProfile.from_dict(data.get("install", {})),
             schema_version=schema_version,
         )

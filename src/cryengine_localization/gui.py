@@ -13,10 +13,14 @@ from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
 from cryengine_localization.core.install import InstalledItem
 from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
 from cryengine_localization.core.workflow import (
+    build_batch_profile,
     build_profile,
+    export_batch_profile_catalog,
     export_profile_catalog,
     install_profile,
     plan_profile_changes,
+    plan_batch_profile_changes,
+    reuse_batch_profile_translations,
     plan_profile_install,
     rollback_profile,
 )
@@ -68,6 +72,7 @@ def launch_gui(ui_language: str | None = None) -> None:
             notebook.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 4))
             self._build_project_tab(notebook, ttk, filedialog)
             self._build_translation_tab(notebook, ttk, messagebox)
+            self._build_batch_tab(notebook, ttk, filedialog, messagebox)
             self._build_font_tab(notebook, ttk, filedialog)
             self._build_pak_tab(notebook, ttk, filedialog)
             self._build_install_tab(notebook, ttk, messagebox)
@@ -125,6 +130,34 @@ def launch_gui(ui_language: str | None = None) -> None:
             self._localized(ttk.Button(tab, command=self._dry_run), "button.dry_run").grid(row=1, column=1, padx=8, pady=4, sticky="w")
             self._localized(ttk.Button(tab, command=self._build_translation), "button.build_translation").grid(row=1, column=2, padx=8, pady=4, sticky="w")
             tab.columnconfigure(2, weight=1)
+
+        def _build_batch_tab(self, notebook: Any, ttk: Any, filedialog: Any, messagebox: Any) -> None:
+            tab = ttk.Frame(notebook, padding=12)
+            self._localized_tab(notebook, tab, "tab.batch")
+            self._localized(
+                ttk.Checkbutton(
+                    tab,
+                    variable=self._var("batch_enabled"),
+                    onvalue="true",
+                    offvalue="false",
+                ),
+                "check.enable_batch",
+            ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            self._add_path_entry(tab, ttk, filedialog, 1, "field.batch_game_root", "batch_game_root", save=False, directory=True)
+            self._add_path_entry(tab, ttk, filedialog, 2, "field.batch_catalog_csv", "batch_catalog_csv", save=True, pattern="*.csv")
+            self._add_path_entry(tab, ttk, filedialog, 3, "field.batch_legacy_csv", "batch_legacy_translation_csv", save=False, pattern="*.csv")
+            self._add_path_entry(tab, ttk, filedialog, 4, "field.batch_scan_report", "batch_scan_report", save=True, pattern="*.json")
+            self._add_path_entry(tab, ttk, filedialog, 5, "field.batch_translation_pak", "batch_translation_overlay_pak", save=True, pattern="*.pak")
+            self._add_path_entry(tab, ttk, filedialog, 6, "field.batch_manifest", "batch_manifest", save=True, pattern="*.json")
+            self._add_path_entry(tab, ttk, filedialog, 7, "field.batch_font_file", "batch_font_file", save=False, pattern="*.ttf")
+            self._add_path_entry(tab, ttk, filedialog, 8, "field.batch_font_pak", "batch_font_overlay_pak", save=True, pattern="*.pak")
+            self._add_path_entry(tab, ttk, filedialog, 9, "field.batch_ffdec", "batch_ffdec", save=False, pattern="*.exe")
+            self._localized(ttk.Label(tab, foreground="#555555"), "hint.batch").grid(row=10, column=0, columnspan=3, sticky="w", pady=(4, 10))
+            self._localized(ttk.Button(tab, command=lambda: self._batch_scan(messagebox)), "button.batch_scan").grid(row=11, column=0, padx=(0, 8), pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=lambda: self._batch_reuse_old(messagebox)), "button.batch_reuse_old").grid(row=11, column=1, padx=8, pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=self._batch_dry_run), "button.batch_dry_run").grid(row=11, column=2, padx=8, pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=lambda: self._batch_build(messagebox)), "button.batch_build").grid(row=12, column=0, padx=(0, 8), pady=4, sticky="w")
+            tab.columnconfigure(1, weight=1)
 
         def _build_font_tab(self, notebook: Any, ttk: Any, filedialog: Any) -> None:
             tab = ttk.Frame(notebook, padding=12)
@@ -318,6 +351,79 @@ def launch_gui(ui_language: str | None = None) -> None:
                 )
             except Exception as exc:
                 self._show_error("error.build_translation", exc)
+
+        def _batch_scan(self, messagebox: Any) -> None:
+            try:
+                profile = self._profile()
+                output = Path(profile.batch.catalog_csv).expanduser()
+                confirmed = confirm_csv_overwrite(
+                    output,
+                    lambda path: messagebox.askyesno(
+                        self._t("confirm.overwrite.title"),
+                        self._t("confirm.overwrite.body", path=path),
+                    ),
+                )
+                if not confirmed:
+                    self._write_log(self._t("log.csv_cancelled"))
+                    return
+                catalog, count, report = export_batch_profile_catalog(profile, overwrite=True)
+                self._write_log(self._t("log.batch_scanned", count=count, csv=catalog, report=report))
+            except Exception as exc:
+                self._show_error("error.batch_scan", exc)
+
+        def _batch_dry_run(self) -> None:
+            try:
+                changes = plan_batch_profile_changes(self._profile())
+                self._write_log(json.dumps([change.__dict__ for change in changes], ensure_ascii=False, indent=2))
+            except Exception as exc:
+                self._show_error("error.batch_dry_run", exc)
+
+        def _batch_reuse_old(self, messagebox: Any) -> None:
+            try:
+                profile = self._profile()
+                if not profile.batch.legacy_translation_csv:
+                    raise ValueError("old translation CSV is required")
+                if not messagebox.askyesno(
+                    self._t("confirm.overwrite.title"),
+                    self._t("confirm.batch_reuse", path=profile.batch.catalog_csv),
+                ):
+                    return
+                result = reuse_batch_profile_translations(profile)
+                self._write_log(
+                    self._t(
+                        "log.batch_reused",
+                        count=result.reuse.copied_translations,
+                        backup=result.backup_path,
+                        report=result.report_path,
+                    )
+                )
+            except Exception as exc:
+                self._show_error("error.batch_reuse_old", exc)
+
+        def _batch_build(self, messagebox: Any) -> None:
+            try:
+                profile = self._profile()
+                paths = [profile.batch.translation_overlay_pak, profile.batch.manifest]
+                if profile.batch.font_overlay_pak:
+                    paths.append(profile.batch.font_overlay_pak)
+                existing = [str(Path(path).expanduser()) for path in paths if path and Path(path).expanduser().exists()]
+                if existing and not messagebox.askyesno(
+                    self._t("confirm.overwrite.title"),
+                    self._t("confirm.overwrite.body", path="\n".join(existing)),
+                ):
+                    return
+                result = build_batch_profile(profile)
+                font_path = str(result.font.output_pak) if result.font is not None else self._t("log.none")
+                self._write_log(
+                    self._t(
+                        "log.batch_built",
+                        translation=result.translation.output_pak,
+                        font=font_path,
+                        manifest=result.manifest_path,
+                    )
+                )
+            except Exception as exc:
+                self._show_error("error.batch_build", exc)
 
         def _scan_fonts(self) -> None:
             try:

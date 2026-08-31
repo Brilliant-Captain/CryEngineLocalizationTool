@@ -31,6 +31,11 @@ cry-localize profile init --output project.json
 cry-localize workflow export-csv project.json
 cry-localize workflow dry-run project.json
 cry-localize workflow build project.json
+cry-localize workflow batch-scan batch-project.json
+cry-localize workflow batch-reuse-old batch-project.json --dry-run
+cry-localize workflow batch-reuse-old batch-project.json
+cry-localize workflow batch-dry-run batch-project.json
+cry-localize workflow batch-build batch-project.json
 cry-localize apply translations.csv --dry-run
 cry-localize apply translations.csv --source-pak GameData.pak --output-pak output\GameData.pak
 cry-localize font scan gfxfontlib.gfx --ffdec <FFDEC_CLI>
@@ -64,5 +69,7 @@ cry-localize gui
 界面默认使用简体中文，其他语言可通过外部 JSON 语言包添加；见 [GUI 界面本地化指南](docs/ui-localization.md)。
 
 字体全量/子集流程见 [字体流程指南](docs/fonts.md)。
+
+全游戏资源扫描、人工翻译 CSV 与批量字体 overlay 见 [批量资源工作流](docs/adapters/batch-resource-localization.md)。GFX 非字体字符串只会进入 `report-only` 查漏记录，工具不会回写它们。
 
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。

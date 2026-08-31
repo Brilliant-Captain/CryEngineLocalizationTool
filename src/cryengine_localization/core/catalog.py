@@ -16,6 +16,9 @@ class CatalogEntry:
     original_hash: str
     translation: str = ""
     status: str = "active"
+    # Optional archive-relative provenance used by the batch workflow.  It is
+    # deliberately last so the legacy positional constructor stays stable.
+    source_archive: str = ""
 
 
 def _entry(source_path: str, text_key: str, text: str) -> CatalogEntry:

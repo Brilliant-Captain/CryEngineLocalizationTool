@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cryengine_localization.core.profile import FontProfile, ProjectProfile
+from cryengine_localization.core.profile import BatchProfile, FontProfile, ProjectProfile
 from cryengine_localization.gui_model import (
     build_catalog_export_args,
     build_cli_args,
@@ -95,3 +95,27 @@ def test_profile_form_round_trip_preserves_subset_font_path() -> None:
     )
 
     assert profile_from_form(profile_to_form(profile)) == profile
+
+
+def test_profile_form_round_trip_preserves_batch_workflow_settings() -> None:
+    profile = ProjectProfile(
+        name="Batch",
+        batch=BatchProfile(
+            enabled=True,
+            game_root="game",
+            catalog_csv="work/all.csv",
+            legacy_translation_csv="work/old.csv",
+            scan_report="work/report.json",
+            translation_overlay_pak="work/translation.pak",
+            manifest="work/manifest.json",
+            font_file="font.ttf",
+            font_overlay_pak="work/fonts.pak",
+            ffdec="ffdec-cli.exe",
+        ),
+    )
+
+    form = profile_to_form(profile)
+
+    assert form["batch_enabled"] == "true"
+    assert form["batch_legacy_translation_csv"] == "work/old.csv"
+    assert profile_from_form(form) == profile

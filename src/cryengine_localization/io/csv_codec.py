@@ -17,8 +17,11 @@ FIELDNAMES = (
     "translation",
     "status",
     "original_hash",
+    "source_archive",
 )
-REQUIRED_FIELDS = set(FIELDNAMES)
+# Batch catalogs carry source_archive, but CSV files exported by earlier tool
+# versions remain valid single-PAK catalogs without it.
+REQUIRED_FIELDS = set(FIELDNAMES) - {"source_archive"}
 
 
 def _open_text(path_or_file: str | Path | TextIO, mode: str):
@@ -59,6 +62,7 @@ def import_catalog(path_or_file: str | Path | TextIO) -> list[CatalogEntry]:
                     original_hash=row["original_hash"],
                     translation=row.get("translation", ""),
                     status=row.get("status", "active"),
+                    source_archive=row.get("source_archive", ""),
                 )
             )
         return entries

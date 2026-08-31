@@ -35,6 +35,22 @@ def test_dry_run_skips_empty_and_stale_translations() -> None:
     assert [(change.text_key, change.translation) for change in changes] == [("a", "译文")]
 
 
+def test_dry_run_skips_report_only_translations() -> None:
+    entries = [
+        CatalogEntry(
+            "ui.gfx:raw@0x10",
+            "ui.gfx",
+            "raw@0x10",
+            "Start",
+            "hash",
+            "开始",
+            status="report-only",
+        )
+    ]
+
+    assert plan_translation_changes(entries) == []
+
+
 def test_apply_rejects_placeholder_loss() -> None:
     data = {"Localizations": [{"key": "x", "value": "Hello {name}"}]}
     entries = [CatalogEntry("x.json:x", "x.json", "x", "Hello {name}", "hash", "你好")]

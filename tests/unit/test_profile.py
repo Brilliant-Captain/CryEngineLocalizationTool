@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from cryengine_localization.core.profile import (
+    BatchProfile,
     ProfileError,
     ProjectProfile,
     load_profile,
@@ -96,3 +97,27 @@ def test_old_profile_without_ui_language_defaults_to_chinese(tmp_path) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
     assert load_profile(path).ui_language == "zh-CN"
+
+
+def test_batch_profile_round_trip_does_not_require_legacy_single_pak_paths(tmp_path) -> None:
+    path = tmp_path / "batch.json"
+    profile = ProjectProfile(
+        name="Batch Project",
+        manifest="",
+        batch=BatchProfile(
+            enabled=True,
+            game_root="D:/Games/Example",
+            catalog_csv="work/all-text.csv",
+            scan_report="work/scan-report.json",
+            translation_overlay_pak="work/zzz_translation.pak",
+            manifest="work/manifest.json",
+            font_file="C:/Fonts/NotoSansCJK.ttf",
+            font_overlay_pak="work/zzz_fonts.pak",
+            ffdec="C:/Tools/ffdec-cli.exe",
+            legacy_translation_csv="work/previous-translations.csv",
+        ),
+    )
+
+    assert save_profile(profile, path) == path.resolve()
+    assert load_profile(path) == profile
+    assert load_profile(path).batch.enabled is True
