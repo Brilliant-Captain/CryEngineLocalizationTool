@@ -26,5 +26,6 @@
 - Added a complete Tkinter workbench for translation, fonts, PAK inspection, and guarded installation.
 - Added built-in `zh-CN` and `en-US` GUI resources with external locale overrides.
 - Added bundled fontTools coverage and subset operations, with optional custom Python override.
+- Added legacy GFX safety assessment and tag-level DefineFont3 migration to avoid unsafe full-file FFDec rebuilds.
 - Added full-font and subset-font documentation and a console PyInstaller entry point.
 - Added public contribution, security, release, and GUI operation guides.

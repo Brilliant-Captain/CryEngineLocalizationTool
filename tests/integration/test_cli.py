@@ -5,6 +5,7 @@ import hashlib
 import zipfile
 
 from cryengine_localization.cli.main import main
+from cryengine_localization.adapters.swf import SWF_HEADER_SIZE, build_tag
 from cryengine_localization.core.catalog import CatalogEntry
 from cryengine_localization.io.csv_codec import export_catalog
 
@@ -117,3 +118,50 @@ def test_cli_gui_passes_interface_language(monkeypatch) -> None:
 
     assert main(["gui", "--ui-language", "en-US"]) == 0
     assert received["ui_language"] == "en-US"
+
+
+def _gfx_fixture(font_marker: bytes = b"old", shape: bytes = b"shape") -> bytes:
+    payload = (
+        bytes(range(SWF_HEADER_SIZE))
+        + build_tag(9, shape)
+        + build_tag(75, (1).to_bytes(2, "little") + font_marker)
+        + build_tag(0, b"")
+    )
+    return b"GFX\x08" + (8 + len(payload)).to_bytes(4, "little") + payload
+
+
+def test_cli_font_assess_outputs_risk_report(tmp_path, capsys) -> None:
+    gfx = tmp_path / "fixture.gfx"
+    gfx.write_bytes(_gfx_fixture())
+
+    assert main(["font", "assess", str(gfx)]) == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["container"] == "GFX"
+    assert report["font_tag_count"] == 1
+    assert report["level"] in {"safe", "caution"}
+
+
+def test_cli_font_migrate_writes_output(tmp_path, capsys) -> None:
+    original = tmp_path / "original.gfx"
+    candidate = tmp_path / "candidate.gfx"
+    output = tmp_path / "migrated.gfx"
+    original.write_bytes(_gfx_fixture())
+    candidate.write_bytes(_gfx_fixture(b"new"))
+
+    assert main(
+        [
+            "font",
+            "migrate",
+            str(original),
+            "--candidate",
+            str(candidate),
+            "--output-gfx",
+            str(output),
+            "--slot",
+            "1=placeholder.ttf",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert output.read_bytes() != original.read_bytes()
+    assert output.read_bytes() == candidate.read_bytes()

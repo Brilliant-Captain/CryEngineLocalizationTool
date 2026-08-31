@@ -41,3 +41,34 @@ cry-localize pak build work\font_overlay work\font_overlay.pak
 ```
 
 不要把 FFDec GUI launcher 当作 CLI；必须填写能够接受 `-dumpSWF`/`-replace` 参数的 `ffdec-cli.exe`。
+
+## 旧式 GFX 安全评估与原位移植
+
+FFDec 的 `-replace` 会重建整个 GFX。旧版或预加载的 Scaleform 文件可能在游戏运行时崩溃，即使 FFDec 能重新解析输出。先执行安全评估：
+
+```powershell
+cry-localize font assess <INPUT_GFX>
+cry-localize font assess <INPUT_GFX> --candidate <FFDEC_CANDIDATE_GFX>
+```
+
+报告会给出 `safe`、`caution` 或 `blocked`，并说明文件体积增长、字体占比、非字体 tag 改动等原因。`blocked` 表示不应直接把 FFDec 候选安装到游戏中。
+
+对于需要保留旧版 GFX 时间轴和布局的文件，使用原位移植：
+
+```powershell
+cry-localize font migrate <INPUT_GFX> `
+  --output-gfx <OUTPUT_GFX> `
+  --ffdec <FFDEC_CLI> `
+  --slot 1=<FONT_FILE>
+```
+
+工具只在临时目录调用 FFDec 生成候选，然后从候选中提取指定 `DefineFont3` tag，写回原版 GFX；原版的非字体 tag、导出表、脚本和时间轴会被保留。也可以提供 `--candidate` 跳过候选生成，直接移植一个已生成的候选：
+
+```powershell
+cry-localize font migrate <INPUT_GFX> `
+  --candidate <CANDIDATE_GFX> `
+  --output-gfx <OUTPUT_GFX> `
+  --slot 1=<FONT_FILE>
+```
+
+原位移植仍需在目标游戏中手工验证；如果 GFX tag 顺序或容器头不一致，工具会拒绝输出。

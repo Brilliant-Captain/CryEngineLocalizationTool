@@ -12,7 +12,10 @@ from cryengine_localization import __version__
 from cryengine_localization.adapters.cryengine import identify_project
 from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
 from cryengine_localization.adapters.gfxfont import (
+    assess_gfx_safety,
+    migrate_define_font3_tags,
     inspect_font_coverage,
+    replace_font_slots_in_place,
     replace_font_slots,
     scan_gfx_fonts,
     subset_font,
@@ -173,6 +176,34 @@ def _cmd_build(args: argparse.Namespace) -> int:
 def _cmd_font_scan(args: argparse.Namespace) -> int:
     slots = scan_gfx_fonts(args.gfx, args.ffdec)
     _print_json([slot.__dict__ for slot in slots])
+    return 0
+
+
+def _cmd_font_assess(args: argparse.Namespace) -> int:
+    report = assess_gfx_safety(args.gfx, candidate_path=args.candidate)
+    _print_json(report.__dict__)
+    return 0
+
+
+def _cmd_font_migrate(args: argparse.Namespace) -> int:
+    identifiers: set[int] = set()
+    replacements: dict[int, str] = {}
+    for specification in args.slot:
+        identifier, separator, font_file = specification.partition("=")
+        if not separator or not identifier.isdigit() or not font_file:
+            raise ValueError(f"invalid --slot value {specification!r}; expected ID=FONT_FILE")
+        identifiers.add(int(identifier))
+        replacements[int(identifier)] = font_file
+    if args.candidate:
+        output = migrate_define_font3_tags(args.gfx, args.candidate, args.output_gfx, identifiers)
+    else:
+        output = replace_font_slots_in_place(
+            args.gfx,
+            args.output_gfx,
+            replacements,
+            ffdec_cli=args.ffdec,
+        )
+    print(output)
     return 0
 
 
@@ -472,12 +503,23 @@ def build_parser() -> argparse.ArgumentParser:
     font_scan.add_argument("gfx")
     font_scan.add_argument("--ffdec")
     font_scan.set_defaults(func=_cmd_font_scan)
+    font_assess = font_sub.add_parser("assess")
+    font_assess.add_argument("gfx")
+    font_assess.add_argument("--candidate")
+    font_assess.set_defaults(func=_cmd_font_assess)
     font_replace = font_sub.add_parser("replace")
     font_replace.add_argument("gfx")
     font_replace.add_argument("--output-gfx", required=True)
     font_replace.add_argument("--ffdec")
     font_replace.add_argument("--slot", action="append", required=True, help="FONT_ID=FONT_FILE")
     font_replace.set_defaults(func=_cmd_font_replace)
+    font_migrate = font_sub.add_parser("migrate")
+    font_migrate.add_argument("gfx")
+    font_migrate.add_argument("--candidate")
+    font_migrate.add_argument("--ffdec")
+    font_migrate.add_argument("--output-gfx", required=True)
+    font_migrate.add_argument("--slot", action="append", required=True, help="FONT_ID=FONT_FILE (font path is used for ID validation)")
+    font_migrate.set_defaults(func=_cmd_font_migrate)
     font_subset = font_sub.add_parser("subset")
     font_subset.add_argument("font")
     font_subset.add_argument("text")

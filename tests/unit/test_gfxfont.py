@@ -9,14 +9,18 @@ from cryengine_localization.adapters.gfxfont import (
     FontSlot,
     GfxFormatError,
     GfxToolError,
+    assess_gfx_safety,
     build_font_replace_command,
+    compare_gfx_rebuilds,
     inspect_font_coverage,
+    replace_font_slots_in_place,
     parse_ffdec_font_dump,
     replace_font_slots,
     scan_gfx_fonts,
     subset_font,
     validate_gfx_bytes,
 )
+from cryengine_localization.adapters.swf import SWF_HEADER_SIZE, build_tag
 
 
 def test_parse_ffdec_dump_discovers_font_slots_and_exports() -> None:
@@ -124,3 +128,77 @@ def test_subset_font_defaults_to_bundled_fonttools(monkeypatch) -> None:
     )
 
     assert subset_font("font.ttf", "text.txt", "subset.ttf") == expected
+
+
+def _legacy_gfx_payload(font_marker: bytes = b"font", *, changed_shape: bool = False) -> bytes:
+    header = bytes(range(SWF_HEADER_SIZE))
+    shape = b"changed" if changed_shape else b"shape"
+    return header + build_tag(9, shape) + build_tag(75, (1).to_bytes(2, "little") + font_marker) + build_tag(0, b"")
+
+
+def test_assess_gfx_safety_flags_small_compressed_font_file(tmp_path) -> None:
+    import zlib
+
+    path = tmp_path / "small.cfx"
+    payload = _legacy_gfx_payload(b"font")
+    path.write_bytes(b"CFX\x0f" + (8 + len(payload)).to_bytes(4, "little") + zlib.compress(payload, 9))
+
+    report = assess_gfx_safety(path)
+
+    assert report.level == "caution"
+    assert any("small compressed" in reason for reason in report.reasons)
+
+
+def test_compare_gfx_rebuilds_allows_font_only_change(tmp_path) -> None:
+    original = tmp_path / "original.gfx"
+    candidate = tmp_path / "candidate.gfx"
+    header = b"GFX\x08" + (8 + len(_legacy_gfx_payload())).to_bytes(4, "little")
+    original.write_bytes(header + _legacy_gfx_payload())
+    candidate.write_bytes(header + _legacy_gfx_payload(b"new-font"))
+
+    comparison = compare_gfx_rebuilds(original, candidate, {1})
+
+    assert comparison.non_font_changes == ()
+    assert comparison.changed_font_ids == (1,)
+    assert comparison.level != "blocked"
+
+
+def test_assess_gfx_safety_blocks_non_font_candidate_change(tmp_path) -> None:
+    original = tmp_path / "original.gfx"
+    candidate = tmp_path / "candidate.gfx"
+    original_payload = _legacy_gfx_payload()
+    candidate_payload = _legacy_gfx_payload(b"new-font", changed_shape=True)
+    original.write_bytes(b"GFX\x08" + (8 + len(original_payload)).to_bytes(4, "little") + original_payload)
+    candidate.write_bytes(b"GFX\x08" + (8 + len(candidate_payload)).to_bytes(4, "little") + candidate_payload)
+
+    report = assess_gfx_safety(original, candidate_path=candidate)
+
+    assert report.level == "blocked"
+    assert any("non-font" in reason for reason in report.reasons)
+
+
+def test_replace_font_slots_in_place_keeps_original_non_font_tags(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "source.gfx"
+    output = tmp_path / "output.gfx"
+    font = tmp_path / "font.ttf"
+    source_payload = _legacy_gfx_payload(b"old", changed_shape=False)
+    candidate_payload = _legacy_gfx_payload(b"new", changed_shape=True)
+    source.write_bytes(b"GFX\x08" + (8 + len(source_payload)).to_bytes(4, "little") + source_payload)
+    font.write_bytes(b"font")
+
+    monkeypatch.setattr(
+        "cryengine_localization.adapters.gfxfont.scan_gfx_fonts",
+        lambda *_args, **_kwargs: (FontSlot(1, "_typewriter"),),
+    )
+
+    def fake_run(command, **_kwargs):
+        Path(command[3]).write_bytes(b"GFX\x08" + (8 + len(candidate_payload)).to_bytes(4, "little") + candidate_payload)
+
+    monkeypatch.setattr("cryengine_localization.adapters.gfxfont.subprocess.run", fake_run)
+
+    replace_font_slots_in_place(source, output, {1: font}, ffdec_cli="ffdec")
+
+    result_tags = list(__import__("cryengine_localization.adapters.swf", fromlist=["iter_tags"]).iter_tags(__import__("cryengine_localization.adapters.swf", fromlist=["decode_gfx_container"]).decode_gfx_container(output.read_bytes()).payload))
+    source_tags = list(__import__("cryengine_localization.adapters.swf", fromlist=["iter_tags"]).iter_tags(__import__("cryengine_localization.adapters.swf", fromlist=["decode_gfx_container"]).decode_gfx_container(source.read_bytes()).payload))
+    assert result_tags[0].raw == source_tags[0].raw
+    assert result_tags[1].payload.endswith(b"new")
