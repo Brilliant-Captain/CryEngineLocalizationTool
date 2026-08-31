@@ -41,10 +41,12 @@ cry-localize workflow batch-reuse-old project.json --dry-run
 cry-localize workflow batch-reuse-old project.json
 # 手工编辑 work\all-text.csv 的 translation 列
 cry-localize workflow batch-dry-run project.json
+cry-localize workflow batch-build-translation project.json
+cry-localize workflow batch-build-font project.json
 cry-localize workflow batch-build project.json
 ```
 
-`batch-scan` 的 `catalog_csv` 只保存 `active` 翻译行，适合直接在 Excel/WPS 打开。`scan_report` 同目录会生成 `<报告名>-parts/report-index.csv`，以及按 `json`、`xml`、`gfx`、`other` 分类、每份最多 10,000 行的 `report-only` 分片。`batch-scan` 已存在这些输出时拒绝覆盖，除非传入 `--overwrite`。`batch-dry-run` 只显示可写入译文；`report-only` 项不会显示为计划变更。`batch-build` 创建翻译 PAK 和 Manifest，但不会自动安装到游戏目录。
+`batch-scan` 的 `catalog_csv` 只保存 `active` 翻译行，适合直接在 Excel/WPS 打开。`scan_report` 同目录会生成 `<报告名>-parts/report-index.csv`，以及按 `json`、`xml`、`gfx`、`other` 分类、每份最多 10,000 行的 `report-only` 分片。`batch-scan` 已存在这些输出时拒绝覆盖，除非传入 `--overwrite`。`batch-dry-run` 输出总行数、可构建数、空译文数、失败数及最多 100 条失败详情，不会枚举成功条目。`batch-build-translation` 只生成翻译 PAK 与 Manifest；`batch-build-font` 只生成字体 PAK 与字体报告；`batch-build` 组合构建两者。三种构建都不会自动安装到游戏目录。
 
 当 profile 的 `overlay_mode` 为 `english-path-overlay`（War of Rights 的推荐设置）时，只有 `Localization/english/` 下的可写资源保持 `active`；其它语言目录自动降为 `report-only`，避免翻译不会被该加载方式采用的文本。
 

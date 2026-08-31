@@ -36,6 +36,7 @@ from cryengine_localization.core.install import (
 from cryengine_localization.core.manifest import build_manifest, sha256_file, write_manifest
 from cryengine_localization.core.profile import ProfileError, ProjectProfile
 from cryengine_localization.core.translation_reuse import TranslationReuseReport, reuse_translations
+from cryengine_localization.core.stale import validate_translation
 from cryengine_localization.io.csv_codec import export_catalog, import_catalog
 from cryengine_localization.io.spreadsheetml import catalog_from_spreadsheetml_bytes
 
@@ -45,6 +46,46 @@ class BatchWorkflowBuild:
     translation: BatchTranslationBuild
     font: BatchFontBuild | None
     manifest_path: Path
+
+
+@dataclass(frozen=True)
+class BatchDryRunFailure:
+    resource_id: str
+    source_path: str
+    text_key: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class BatchDryRunReport:
+    total_rows: int
+    ready_count: int
+    empty_translation_count: int
+    inactive_row_count: int
+    failure_count: int
+    failures: tuple[BatchDryRunFailure, ...]
+    failures_truncated: bool
+
+
+class BatchPreflightError(ValueError):
+    """The compact batch preflight found invalid translations."""
+
+    def __init__(self, report: BatchDryRunReport) -> None:
+        self.report = report
+        detail = report.failures[0].resource_id if report.failures else "unknown"
+        super().__init__(f"batch preflight found {report.failure_count} invalid translation(s); first: {detail}")
+
+
+@dataclass(frozen=True)
+class BatchTranslationProfileBuild:
+    translation: BatchTranslationBuild
+    manifest_path: Path
+
+
+@dataclass(frozen=True)
+class BatchFontProfileBuild:
+    font: BatchFontBuild
+    report_path: Path
 
 
 @dataclass(frozen=True)
@@ -326,6 +367,54 @@ def plan_batch_profile_changes(profile: ProjectProfile) -> list[TranslationChang
     return plan_translation_changes(_batch_overlay_entries(profile, import_catalog(batch.catalog_csv)))
 
 
+def plan_batch_profile_report(
+    profile: ProjectProfile, *, max_failure_details: int = 100
+) -> BatchDryRunReport:
+    """Return a bounded preflight summary instead of every successful change."""
+
+    if max_failure_details <= 0:
+        raise ValueError("max_failure_details must be positive")
+    profile.validate()
+    batch = profile.batch.require_dry_run()
+    entries = _batch_overlay_entries(profile, import_catalog(batch.catalog_csv))
+    ready = 0
+    empty = 0
+    inactive = 0
+    failure_count = 0
+    failures: list[BatchDryRunFailure] = []
+    for entry in entries:
+        if entry.status != "active":
+            inactive += 1
+            continue
+        if not entry.translation.strip():
+            empty += 1
+            continue
+        try:
+            validate_translation(entry.original_text, entry.translation)
+        except ValueError as exc:
+            failure_count += 1
+            if len(failures) < max_failure_details:
+                failures.append(
+                    BatchDryRunFailure(
+                        entry.resource_id,
+                        entry.source_path,
+                        entry.text_key,
+                        str(exc),
+                    )
+                )
+            continue
+        ready += 1
+    return BatchDryRunReport(
+        total_rows=len(entries),
+        ready_count=ready,
+        empty_translation_count=empty,
+        inactive_row_count=inactive,
+        failure_count=failure_count,
+        failures=tuple(failures),
+        failures_truncated=failure_count > len(failures),
+    )
+
+
 def _next_reuse_backup_path(catalog_path: Path) -> Path:
     candidate = catalog_path.with_name(f"{catalog_path.stem}.before-reuse{catalog_path.suffix}")
     number = 2
@@ -375,25 +464,13 @@ def reuse_batch_profile_translations(
     return BatchTranslationReuse(catalog_path, backup_path, report_path, reuse)
 
 
-def build_batch_profile(profile: ProjectProfile) -> BatchWorkflowBuild:
-    """Build translation/font overlays and a manifest; never install into the game."""
-
-    profile.validate()
-    batch = profile.batch.require_build()
-    entries = _batch_overlay_entries(profile, import_catalog(batch.catalog_csv))
-    translation = build_batch_translation_overlay(
-        batch.game_root,
-        entries,
-        batch.translation_overlay_pak,
-    )
-    font: BatchFontBuild | None = None
-    if batch.font_file:
-        font = build_batch_font_overlay(
-            batch.game_root,
-            batch.font_file,
-            batch.font_overlay_pak,
-            ffdec_cli=batch.ffdec or None,
-        )
+def _build_batch_manifest(
+    profile: ProjectProfile,
+    entries: list[CatalogEntry],
+    translation: BatchTranslationBuild,
+    font: BatchFontBuild | None,
+) -> Path:
+    batch = profile.batch
     replacements = [
         {
             "source_archive": entry.source_archive,
@@ -427,6 +504,65 @@ def build_batch_profile(profile: ProjectProfile) -> BatchWorkflowBuild:
         overlay_mode=profile.overlay_mode,
     )
     manifest_path = write_manifest(manifest, batch.manifest)
+    return manifest_path
+
+
+def _build_batch_translation(profile: ProjectProfile) -> tuple[list[CatalogEntry], BatchTranslationBuild]:
+    profile.validate()
+    batch = profile.batch.require_translation_build()
+    report = plan_batch_profile_report(profile)
+    if report.failure_count:
+        raise BatchPreflightError(report)
+    entries = _batch_overlay_entries(profile, import_catalog(batch.catalog_csv))
+    translation = build_batch_translation_overlay(
+        batch.game_root,
+        entries,
+        batch.translation_overlay_pak,
+    )
+    return entries, translation
+
+
+def build_batch_translation_profile(profile: ProjectProfile) -> BatchTranslationProfileBuild:
+    """Build only the translation overlay and its manifest."""
+
+    entries, translation = _build_batch_translation(profile)
+    manifest_path = _build_batch_manifest(profile, entries, translation, None)
+    return BatchTranslationProfileBuild(translation, manifest_path)
+
+
+def build_batch_font_profile(profile: ProjectProfile) -> BatchFontProfileBuild:
+    """Build only the font overlay, without requiring a translation CSV."""
+
+    profile.validate()
+    batch = profile.batch.require_font_build()
+    font = build_batch_font_overlay(
+        batch.game_root,
+        batch.font_file,
+        batch.font_overlay_pak,
+        ffdec_cli=batch.ffdec or None,
+    )
+    output = Path(batch.font_overlay_pak).expanduser().resolve()
+    report_path = output.with_name(f"{output.stem}.font-report.json")
+    _write_json_atomic(
+        {
+            "output_pak": output.name,
+            "replaced_paths": list(font.replaced_paths),
+            "skipped_paths": list(font.skipped_paths),
+            "discovery_issues": [asdict(issue) for issue in font.discovery_issues],
+        },
+        report_path,
+    )
+    return BatchFontProfileBuild(font, report_path)
+
+
+def build_batch_profile(profile: ProjectProfile) -> BatchWorkflowBuild:
+    """Build translation/font overlays and a manifest; never install into the game."""
+
+    entries, translation = _build_batch_translation(profile)
+    font: BatchFontBuild | None = None
+    if profile.batch.font_file:
+        font = build_batch_font_profile(profile).font
+    manifest_path = _build_batch_manifest(profile, entries, translation, font)
     return BatchWorkflowBuild(translation, font, manifest_path)
 
 

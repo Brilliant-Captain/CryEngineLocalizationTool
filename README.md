@@ -35,6 +35,8 @@ cry-localize workflow batch-scan batch-project.json
 cry-localize workflow batch-reuse-old batch-project.json --dry-run
 cry-localize workflow batch-reuse-old batch-project.json
 cry-localize workflow batch-dry-run batch-project.json
+cry-localize workflow batch-build-translation batch-project.json
+cry-localize workflow batch-build-font batch-project.json
 cry-localize workflow batch-build batch-project.json
 cry-localize apply translations.csv --dry-run
 cry-localize apply translations.csv --source-pak GameData.pak --output-pak output\GameData.pak

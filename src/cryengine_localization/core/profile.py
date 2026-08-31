@@ -197,10 +197,25 @@ class BatchProfile:
         return self
 
     def require_build(self) -> "BatchProfile":
+        self.require_translation_build()
+        return self
+
+    def require_translation_build(self) -> "BatchProfile":
         self.require_dry_run()
         for value, label in (
             (self.translation_overlay_pak, "batch.translation_overlay_pak"),
             (self.manifest, "batch.manifest"),
+        ):
+            _require_string(value, label)
+        return self
+
+    def require_font_build(self) -> "BatchProfile":
+        if not self.enabled:
+            raise ProfileError("batch workflow is not enabled")
+        for value, label in (
+            (self.game_root, "batch.game_root"),
+            (self.font_file, "batch.font_file"),
+            (self.font_overlay_pak, "batch.font_overlay_pak"),
         ):
             _require_string(value, label)
         return self

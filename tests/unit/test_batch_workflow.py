@@ -7,7 +7,15 @@ import pytest
 from cryengine_localization.adapters.batch_resources import scan_game_resources
 from cryengine_localization.adapters.pak import build_pak, read_pak_members
 from cryengine_localization.adapters.gfxfont import FontSlot, GfxNoFontSlotsError, GfxToolError
-from cryengine_localization.core.batch_workflow import build_batch_font_overlay, build_batch_translation_overlay
+from cryengine_localization.core.batch_workflow import (
+    BatchFontBuild,
+    build_batch_font_overlay,
+    build_batch_translation_overlay,
+)
+from cryengine_localization.core.profile import BatchProfile, ProjectProfile
+from cryengine_localization.core.catalog import CatalogEntry
+from cryengine_localization.io.csv_codec import export_catalog
+from cryengine_localization.core.workflow import build_batch_font_profile, plan_batch_profile_report
 from cryengine_localization.io.json_localization import parse_json_relaxed
 
 
@@ -168,3 +176,82 @@ def test_build_batch_font_overlay_skips_no_slot_scan_errors(tmp_path, monkeypatc
 
     assert report.replaced_paths == ("Libs/UI/with-font.gfx",)
     assert report.skipped_paths == ("Libs/UI/none.gfx",)
+
+
+def test_batch_dry_run_report_summarizes_ready_empty_and_invalid_rows(tmp_path) -> None:
+    csv_path = tmp_path / "translations-active.csv"
+
+    def catalog_entry(resource_id, text_key, original_hash, translation=""):
+        return CatalogEntry(
+            resource_id,
+            "Localization/english/Main.json",
+            text_key,
+            text_key,
+            original_hash,
+            translation,
+            source_archive="Assets/GameData.pak",
+        )
+
+    entries = [
+        catalog_entry(
+            "Assets/GameData.pak::Localization/english/Main.json:ok",
+            "ok",
+            "hash-ok",
+            translation="正常",
+        ),
+        catalog_entry(
+            "Assets/GameData.pak::Localization/english/Main.json:bad",
+            "bad {name}",
+            "hash-bad",
+            translation="缺少占位符",
+        ),
+        catalog_entry(
+            "Assets/GameData.pak::Localization/english/Main.json:empty",
+            "empty",
+            "hash-empty",
+        ),
+    ]
+    entries[1] = replace(entries[1], original_text="Bad {name}")
+    export_catalog(entries, csv_path)
+    profile = ProjectProfile(
+        name="Batch",
+        batch=BatchProfile(
+            enabled=True,
+            game_root=str(tmp_path),
+            catalog_csv=str(csv_path),
+            scan_report=str(tmp_path / "scan.json"),
+        ),
+    )
+
+    report = plan_batch_profile_report(profile)
+
+    assert report.ready_count == 1
+    assert report.empty_translation_count == 1
+    assert report.failure_count == 1
+    assert report.failures[0].text_key == "bad {name}"
+    assert "placeholder mismatch" in report.failures[0].reason
+
+
+def test_build_batch_font_profile_requires_only_font_settings(tmp_path, monkeypatch) -> None:
+    font = tmp_path / "font.ttf"
+    font.write_bytes(b"font")
+    output = tmp_path / "fonts.pak"
+    profile = ProjectProfile(
+        name="Fonts only",
+        batch=BatchProfile(
+            enabled=True,
+            game_root=str(tmp_path),
+            font_file=str(font),
+            font_overlay_pak=str(output),
+        ),
+    )
+    expected = BatchFontBuild(output, ("Libs/UI/gfxfontlib.gfx",), (), ())
+    monkeypatch.setattr(
+        "cryengine_localization.core.workflow.build_batch_font_overlay",
+        lambda *_args, **_kwargs: expected,
+    )
+
+    result = build_batch_font_profile(profile)
+
+    assert result.font == expected
+    assert result.report_path.name == "fonts.font-report.json"

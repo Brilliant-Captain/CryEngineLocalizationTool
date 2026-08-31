@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -13,13 +14,15 @@ from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
 from cryengine_localization.core.install import InstalledItem
 from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
 from cryengine_localization.core.workflow import (
+    build_batch_font_profile,
     build_batch_profile,
+    build_batch_translation_profile,
     build_profile,
     export_batch_profile_catalog,
     export_profile_catalog,
     install_profile,
     plan_profile_changes,
-    plan_batch_profile_changes,
+    plan_batch_profile_report,
     reuse_batch_profile_translations,
     plan_profile_install,
     rollback_profile,
@@ -156,7 +159,9 @@ def launch_gui(ui_language: str | None = None) -> None:
             self._localized(ttk.Button(tab, command=lambda: self._batch_scan(messagebox)), "button.batch_scan").grid(row=11, column=0, padx=(0, 8), pady=4, sticky="w")
             self._localized(ttk.Button(tab, command=lambda: self._batch_reuse_old(messagebox)), "button.batch_reuse_old").grid(row=11, column=1, padx=8, pady=4, sticky="w")
             self._localized(ttk.Button(tab, command=self._batch_dry_run), "button.batch_dry_run").grid(row=11, column=2, padx=8, pady=4, sticky="w")
-            self._localized(ttk.Button(tab, command=lambda: self._batch_build(messagebox)), "button.batch_build").grid(row=12, column=0, padx=(0, 8), pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=lambda: self._batch_build_translation(messagebox)), "button.batch_build_translation").grid(row=12, column=0, padx=(0, 8), pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=lambda: self._batch_build_font(messagebox)), "button.batch_build_font").grid(row=12, column=1, padx=8, pady=4, sticky="w")
+            self._localized(ttk.Button(tab, command=lambda: self._batch_build(messagebox)), "button.batch_build_all").grid(row=12, column=2, padx=8, pady=4, sticky="w")
             tab.columnconfigure(1, weight=1)
 
         def _build_font_tab(self, notebook: Any, ttk: Any, filedialog: Any) -> None:
@@ -373,8 +378,24 @@ def launch_gui(ui_language: str | None = None) -> None:
 
         def _batch_dry_run(self) -> None:
             try:
-                changes = plan_batch_profile_changes(self._profile())
-                self._write_log(json.dumps([change.__dict__ for change in changes], ensure_ascii=False, indent=2))
+                report = plan_batch_profile_report(self._profile())
+                summary = self._t(
+                    "log.batch_dry_run",
+                    total=report.total_rows,
+                    ready=report.ready_count,
+                    empty=report.empty_translation_count,
+                    failures=report.failure_count,
+                )
+                if report.failure_count:
+                    summary += "\n" + json.dumps(
+                        {
+                            "failures": [asdict(item) for item in report.failures],
+                            "failures_truncated": report.failures_truncated,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                self._write_log(summary)
             except Exception as exc:
                 self._show_error("error.batch_dry_run", exc)
 
@@ -424,6 +445,47 @@ def launch_gui(ui_language: str | None = None) -> None:
                 )
             except Exception as exc:
                 self._show_error("error.batch_build", exc)
+
+        def _batch_build_translation(self, messagebox: Any) -> None:
+            try:
+                profile = self._profile()
+                paths = [profile.batch.translation_overlay_pak, profile.batch.manifest]
+                existing = [str(Path(path).expanduser()) for path in paths if path and Path(path).expanduser().exists()]
+                if existing and not messagebox.askyesno(
+                    self._t("confirm.overwrite.title"),
+                    self._t("confirm.overwrite.body", path="\n".join(existing)),
+                ):
+                    return
+                result = build_batch_translation_profile(profile)
+                self._write_log(
+                    self._t(
+                        "log.batch_translation_built",
+                        translation=result.translation.output_pak,
+                        manifest=result.manifest_path,
+                    )
+                )
+            except Exception as exc:
+                self._show_error("error.batch_build_translation", exc)
+
+        def _batch_build_font(self, messagebox: Any) -> None:
+            try:
+                profile = self._profile()
+                output = Path(profile.batch.font_overlay_pak).expanduser()
+                if output.exists() and not messagebox.askyesno(
+                    self._t("confirm.overwrite.title"),
+                    self._t("confirm.overwrite.body", path=str(output)),
+                ):
+                    return
+                result = build_batch_font_profile(profile)
+                self._write_log(
+                    self._t(
+                        "log.batch_font_built",
+                        font=result.font.output_pak,
+                        report=result.report_path,
+                    )
+                )
+            except Exception as exc:
+                self._show_error("error.batch_build_font", exc)
 
         def _scan_fonts(self) -> None:
             try:

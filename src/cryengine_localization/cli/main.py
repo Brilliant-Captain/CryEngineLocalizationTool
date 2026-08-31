@@ -41,14 +41,16 @@ from cryengine_localization.core.install import (
 from cryengine_localization.core.tools import discover_tools
 from cryengine_localization.core.profile import ProjectProfile, load_profile, save_profile
 from cryengine_localization.core.workflow import (
+    build_batch_font_profile,
     build_batch_profile,
+    build_batch_translation_profile,
     build_profile,
     catalog_from_pak,
     export_batch_profile_catalog,
     export_profile_catalog,
     install_profile,
     plan_profile_changes,
-    plan_batch_profile_changes,
+    plan_batch_profile_report,
     reuse_batch_profile_translations,
     plan_profile_install,
     rollback_profile,
@@ -401,8 +403,8 @@ def _cmd_workflow_batch_scan(args: argparse.Namespace) -> int:
 
 
 def _cmd_workflow_batch_dry_run(args: argparse.Namespace) -> int:
-    changes = plan_batch_profile_changes(load_profile(args.profile))
-    _print_json([change.__dict__ for change in changes])
+    report = plan_batch_profile_report(load_profile(args.profile))
+    _print_json(asdict(report))
     return 0
 
 
@@ -412,6 +414,20 @@ def _cmd_workflow_batch_build(args: argparse.Namespace) -> int:
     if result.font is not None:
         print(f"font {result.font.output_pak}")
     print(f"manifest {result.manifest_path}")
+    return 0
+
+
+def _cmd_workflow_batch_build_translation(args: argparse.Namespace) -> int:
+    result = build_batch_translation_profile(load_profile(args.profile))
+    print(f"wrote {result.translation.output_pak}")
+    print(f"manifest {result.manifest_path}")
+    return 0
+
+
+def _cmd_workflow_batch_build_font(args: argparse.Namespace) -> int:
+    result = build_batch_font_profile(load_profile(args.profile))
+    print(f"font {result.font.output_pak}")
+    print(f"report {result.report_path}")
     return 0
 
 
@@ -650,6 +666,12 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_batch_build = workflow_sub.add_parser("batch-build")
     workflow_batch_build.add_argument("profile")
     workflow_batch_build.set_defaults(func=_cmd_workflow_batch_build)
+    workflow_batch_build_translation = workflow_sub.add_parser("batch-build-translation")
+    workflow_batch_build_translation.add_argument("profile")
+    workflow_batch_build_translation.set_defaults(func=_cmd_workflow_batch_build_translation)
+    workflow_batch_build_font = workflow_sub.add_parser("batch-build-font")
+    workflow_batch_build_font.add_argument("profile")
+    workflow_batch_build_font.set_defaults(func=_cmd_workflow_batch_build_font)
     workflow_batch_reuse = workflow_sub.add_parser("batch-reuse-old")
     workflow_batch_reuse.add_argument("profile")
     workflow_batch_reuse.add_argument("--old-csv")

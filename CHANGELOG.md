@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Changed batch dry-run output to a bounded summary with ready, empty, and failed counts plus at most 100 failure details.
+- Added separate batch translation-only and font-only build commands and GUI actions, while retaining the combined build action.
+- Added localized UI strings and external-locale fallback guidance for the new batch controls.
+
 ## 0.6.0
 
 - Added full-game batch resource discovery with small active translation CSVs, report-only resource shards, and scan summaries.

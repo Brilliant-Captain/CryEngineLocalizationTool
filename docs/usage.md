@@ -1,6 +1,6 @@
 # CryEngine Localization 使用手册
 
-本手册针对 `v0.6.0`。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
+本手册针对 `v0.6.1`。工具只处理 CryEngine 项目和 ZIP 风格 PAK，并支持 JSON 与 Excel SpreadsheetML XML 本地化资源。War of Rights 已实测的可用翻译方式是 English-path overlay：翻译文件仍使用 `Localization/english/` 路径，但放在一个排序靠后的独立 PAK 中。
 
 ## 1. 安装
 
@@ -51,12 +51,17 @@ cry-localize tools doctor
 cry-localize workflow batch-scan project.json
 # 手工填写 batch.catalog_csv 的 translation 列
 cry-localize workflow batch-dry-run project.json
+cry-localize workflow batch-build-translation project.json
+cry-localize workflow batch-build-font project.json
+# 同时生成翻译与字体 PAK
 cry-localize workflow batch-build project.json
 ```
 
 批量扫描覆盖所有 ZIP 风格 PAK 与松散候选文件。主 CSV 只包含可直接人工翻译的 `active` 行；`scan-report-parts/report-index.csv` 列出 `report-only` 查漏分片，按 json/xml/gfx/other 分类且每份最多 10,000 行。`Localization/` 下可正常解析的 JSON 和 SpreadsheetML XML 可构建；GFX/CFX/SWF、普通/损坏 JSON、普通 XML 和普通文本中的英文只会进入 report-only 分片，绝不被自动写回。翻译 PAK 内部路径与文件名保持原始资源名称，且输出必须位于游戏目录外。完整配置字段和字体批处理限制见[批量资源工作流](adapters/batch-resource-localization.md)。
 
 War of Rights 使用 `english-path-overlay` 时，批量 CSV 仅将 `Localization/english/` 的可写行标为 `active`；其它语言目录会自动标为 `report-only`。
+
+批量预演不会把所有可构建条目写入日志：只显示总计、可构建、空译文与失败数量，并列出最多 100 个失败原因。翻译和字体 PAK 可在 GUI 中通过“一键打包翻译 PAK”或“一键打包字体 PAK”分别生成；也可使用“组合构建翻译与字体 PAK”。
 
 ### 2.2 复用旧翻译 CSV
 

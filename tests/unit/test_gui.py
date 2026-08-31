@@ -33,4 +33,6 @@ def test_gui_declares_a_batch_tab_that_delegates_to_core_workflows() -> None:
     assert "_build_batch_tab" in source
     assert "export_batch_profile_catalog" in source
     assert "build_batch_profile" in source
+    assert "build_batch_translation_profile" in source
+    assert "build_batch_font_profile" in source
     assert "reuse_batch_profile_translations" in source

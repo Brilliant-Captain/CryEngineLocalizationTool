@@ -218,7 +218,11 @@ def test_cli_batch_scan_dry_run_and_build_use_profile_paths(tmp_path, capsys) ->
         writer.writerows(rows)
 
     assert main(["workflow", "batch-dry-run", str(profile_path)]) == 0
-    assert "ui_start" in capsys.readouterr().out
+    dry_run = json.loads(capsys.readouterr().out)
+    assert dry_run["ready_count"] == 1
+    assert dry_run["failure_count"] == 0
+    assert main(["workflow", "batch-build-translation", str(profile_path)]) == 0
+    assert "manifest" in capsys.readouterr().out
     assert main(["workflow", "batch-build", str(profile_path)]) == 0
     output = capsys.readouterr().out
     assert "manifest" in output
