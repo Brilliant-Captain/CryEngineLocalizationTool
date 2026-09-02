@@ -37,7 +37,7 @@ from cryengine_localization.core.manifest import build_manifest, sha256_file, wr
 from cryengine_localization.core.profile import ProfileError, ProjectProfile
 from cryengine_localization.core.translation_reuse import TranslationReuseReport, reuse_translations
 from cryengine_localization.core.stale import validate_translation
-from cryengine_localization.io.csv_codec import export_catalog, import_catalog
+from cryengine_localization.io.csv_codec import export_catalog, export_friendly_catalog, import_catalog
 from cryengine_localization.io.spreadsheetml import catalog_from_spreadsheetml_bytes
 
 
@@ -225,7 +225,12 @@ def _write_json_atomic(value: object, output_path: str | Path) -> Path:
     return destination
 
 
-def _export_catalog_atomic(entries: list[CatalogEntry], output_path: str | Path) -> Path:
+def _export_catalog_atomic(
+    entries: list[CatalogEntry],
+    output_path: str | Path,
+    *,
+    friendly: bool = False,
+) -> Path:
     destination = Path(output_path).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(
@@ -234,7 +239,10 @@ def _export_catalog_atomic(entries: list[CatalogEntry], output_path: str | Path)
     os.close(fd)
     temporary = Path(temporary_name)
     try:
-        export_catalog(entries, temporary)
+        if friendly:
+            export_friendly_catalog(entries, temporary)
+        else:
+            export_catalog(entries, temporary)
         os.replace(temporary, destination)
     except Exception:
         temporary.unlink(missing_ok=True)
@@ -308,7 +316,7 @@ def write_report_only_shards(
 
 
 def export_batch_profile_catalog(
-    profile: ProjectProfile, *, overwrite: bool = False
+    profile: ProjectProfile, *, overwrite: bool = False, friendly: bool = False
 ) -> tuple[Path, int, Path]:
     """Scan a complete game root and write its human-editable CSV plus report."""
 
@@ -329,7 +337,7 @@ def export_batch_profile_catalog(
     entries = _batch_overlay_entries(profile, list(scan.catalog))
     active_entries = [entry for entry in entries if entry.status == "active"]
     report_only_entries = [entry for entry in entries if entry.status == "report-only"]
-    _export_catalog_atomic(active_entries, catalog_path)
+    _export_catalog_atomic(active_entries, catalog_path, friendly=friendly)
     index_path, shard_groups = write_report_only_shards(
         report_only_entries,
         report_parts,

@@ -31,6 +31,36 @@ def test_cli_identify_and_catalog_export(tmp_path, capsys) -> None:
     assert "ui_start" in csv_path.read_text(encoding="utf-8")
 
 
+def test_cli_pak_decrypt_plain_archive_preserves_output_path(tmp_path, capsys) -> None:
+    source = tmp_path / "game" / "Localization" / "english_xml.pak"
+    source.parent.mkdir(parents=True)
+    with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("text.xml", b"<Workbook />")
+    helper = tmp_path / "cry-pak-decrypt.exe"
+    key = tmp_path / "public.der"
+    helper.write_bytes(b"helper")
+    key.write_bytes(b"key")
+    output = tmp_path / "out" / "Localization" / "english_xml.pak"
+
+    assert main(
+        [
+            "pak",
+            "decrypt",
+            str(source),
+            str(output),
+            "--decryptor",
+            str(helper),
+            "--public-key",
+            str(key),
+        ]
+    ) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "copied"
+    assert result["encrypted"] is False
+    with zipfile.ZipFile(output) as archive:
+        assert archive.read("text.xml") == b"<Workbook />"
+
+
 def test_cli_build_writes_manifest_without_absolute_source_path(tmp_path, capsys) -> None:
     source = tmp_path / "Assets" / "fixture.pak"
     source.parent.mkdir()
@@ -207,6 +237,12 @@ def test_cli_batch_scan_dry_run_and_build_use_profile_paths(tmp_path, capsys) ->
         rows = list(csv.DictReader(handle))
     assert rows and {row["status"] for row in rows} == {"active"}
     assert not any(row["source_path"].startswith("Localization/Finnish/") for row in rows)
+    assert main(["workflow", "batch-scan", str(profile_path), "--friendly", "--overwrite"]) == 0
+    capsys.readouterr()
+    with (work / "all-text.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+        friendly_rows = list(csv.DictReader(handle))
+    assert friendly_rows and "source_text" in friendly_rows[0]
+    assert "target_translation" in friendly_rows[0]
     with (work / "scan-report-parts" / "report-index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
         report_index = list(csv.DictReader(handle))
     assert report_index and {row["resource_type"] for row in report_index} >= {"json", "gfx"}

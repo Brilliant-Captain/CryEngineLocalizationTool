@@ -97,7 +97,7 @@ def _is_excluded(path: Path, roots: tuple[Path, ...]) -> bool:
 
 
 def _relative_path(root: Path, path: Path) -> str:
-    return path.resolve().relative_to(root).as_posix()
+    return path.absolute().relative_to(root.absolute()).as_posix()
 
 
 def _qualified_entry(entry: CatalogEntry, archive_path: str) -> CatalogEntry:
