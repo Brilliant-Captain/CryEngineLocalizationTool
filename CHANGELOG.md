@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Added CryEngine encrypted PAK decryption for single files and recursive directory trees, with path-preserving PAK or extracted-member output.
+- Added automatic RSA public-key discovery from game EXE/DLL modules and standalone pak discover-key CLI support.
+- Added translator-friendly catalogs with source_text and target_translation, including batch friendly export and compatible build/apply import.
+- Bundled the generic libcrypak-compatible decryptor with Windows builds.
+
 ## 0.6.2
 
 - Fixed FFDec font replacement failures for deeply nested output paths by staging candidate GFX files in the system temporary directory before copying the validated result to its destination.

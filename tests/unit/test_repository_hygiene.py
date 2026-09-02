@@ -31,5 +31,5 @@ def test_package_versions_match() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     package = (ROOT / "src" / "cryengine_localization" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'version = "0.6.2"' in pyproject
-    assert '__version__ = "0.6.2"' in package
+    assert 'version = "0.7.0"' in pyproject
+    assert '__version__ = "0.7.0"' in package
