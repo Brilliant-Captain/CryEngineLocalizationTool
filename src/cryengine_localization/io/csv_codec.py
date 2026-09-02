@@ -19,6 +19,17 @@ FIELDNAMES = (
     "original_hash",
     "source_archive",
 )
+FRIENDLY_FIELDNAMES = (
+    "resource_id",
+    "source_path",
+    "text_key",
+    "source_text",
+    "target_translation",
+    "original_text",
+    "status",
+    "original_hash",
+    "source_archive",
+)
 # Batch catalogs carry source_archive, but CSV files exported by earlier tool
 # versions remain valid single-PAK catalogs without it.
 REQUIRED_FIELDS = set(FIELDNAMES) - {"source_archive"}
@@ -43,12 +54,44 @@ def export_catalog(entries: Iterable[CatalogEntry], path_or_file: str | Path | T
             handle.close()
 
 
+def export_friendly_catalog(
+    entries: Iterable[CatalogEntry], path_or_file: str | Path | TextIO
+) -> None:
+    """Export a translator-facing table without losing source provenance."""
+
+    handle, should_close = _open_text(path_or_file, "w")
+    try:
+        writer = csv.DictWriter(handle, fieldnames=FRIENDLY_FIELDNAMES, lineterminator="\n")
+        writer.writeheader()
+        for entry in entries:
+            writer.writerow(
+                {
+                    "resource_id": entry.resource_id,
+                    "source_path": entry.source_path,
+                    "text_key": entry.text_key,
+                    "source_text": entry.translation or entry.original_text,
+                    "target_translation": "",
+                    "original_text": entry.original_text,
+                    "status": entry.status,
+                    "original_hash": entry.original_hash,
+                    "source_archive": entry.source_archive,
+                }
+            )
+    finally:
+        if should_close:
+            handle.close()
+
+
 def import_catalog(path_or_file: str | Path | TextIO) -> list[CatalogEntry]:
     handle, should_close = _open_text(path_or_file, "r")
     try:
         reader = csv.DictReader(handle)
         fields = set(reader.fieldnames or ())
         missing = REQUIRED_FIELDS - fields
+        if "target_translation" in fields:
+            missing.discard("translation")
+        elif "translation" not in fields:
+            missing.add("translation")
         if missing:
             raise ValueError(f"translation table missing columns: {', '.join(sorted(missing))}")
         entries: list[CatalogEntry] = []
@@ -60,7 +103,11 @@ def import_catalog(path_or_file: str | Path | TextIO) -> list[CatalogEntry]:
                     text_key=row["text_key"],
                     original_text=row["original_text"],
                     original_hash=row["original_hash"],
-                    translation=row.get("translation", ""),
+                    translation=(
+                        row.get("translation")
+                        if row.get("translation") is not None
+                        else row.get("target_translation", "")
+                    ),
                     status=row.get("status", "active"),
                     source_archive=row.get("source_archive", ""),
                 )

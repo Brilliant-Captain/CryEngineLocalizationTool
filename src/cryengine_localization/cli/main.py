@@ -12,6 +12,13 @@ from pathlib import Path
 from cryengine_localization import __version__
 from cryengine_localization.adapters.cryengine import identify_project
 from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
+from cryengine_localization.adapters.pak_decrypt import (
+    decrypt_pak,
+    decrypt_pak_tree,
+    discover_public_key,
+    resolve_decryptor,
+    resolve_public_key,
+)
 from cryengine_localization.adapters.gfxfont import (
     assess_gfx_safety,
     migrate_define_font3_tags,
@@ -55,7 +62,7 @@ from cryengine_localization.core.workflow import (
     plan_profile_install,
     rollback_profile,
 )
-from cryengine_localization.io.csv_codec import export_catalog, import_catalog
+from cryengine_localization.io.csv_codec import export_catalog, export_friendly_catalog, import_catalog
 
 
 def _print_json(value: object) -> None:
@@ -101,6 +108,62 @@ def _cmd_pak_extract(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pak_decrypt(args: argparse.Namespace) -> int:
+    key = resolve_public_key(args.public_key)
+    discovery = None
+    if key is None:
+        if not args.game_root:
+            raise ValueError("automatic key discovery requires --game-root")
+        key_output = args.key_output or str(Path(args.output).expanduser().absolute().parent / ".cryengine-public.der")
+        discovery = discover_public_key(args.game_root, output_key=key_output)
+        key = Path(discovery.key_path)
+    result = decrypt_pak(
+        args.path,
+        args.output,
+        decryptor=resolve_decryptor(args.decryptor),
+        public_key=key,
+        overwrite=args.overwrite,
+        timeout=args.timeout,
+    )
+    _print_json(asdict(result))
+    return 0
+
+
+def _cmd_pak_decrypt_tree(args: argparse.Namespace) -> int:
+    key = resolve_public_key(args.public_key)
+    if key is None:
+        key_output = args.key_output or str(Path(args.output).expanduser().absolute() / ".cryengine-public.der")
+        discovery = discover_public_key(args.game_root or args.input, output_key=key_output)
+        key = Path(discovery.key_path)
+    results, report = decrypt_pak_tree(
+        args.input,
+        args.output,
+        decryptor=resolve_decryptor(args.decryptor),
+        public_key=key,
+        mode=args.mode,
+        overwrite=args.overwrite,
+        timeout=args.timeout,
+        report_path=args.report,
+    )
+    _print_json(
+        {
+            "total": len(results),
+            "succeeded": sum(item.status != "failed" for item in results),
+            "failed": sum(item.status == "failed" for item in results),
+            "mode": args.mode,
+            "report": str(report) if report else None,
+            "results": [asdict(item) for item in results],
+        }
+    )
+    return 0 if all(item.status != "failed" for item in results) else 1
+
+
+def _cmd_pak_discover_key(args: argparse.Namespace) -> int:
+    discovery = discover_public_key(args.game_root, output_key=args.output)
+    _print_json(asdict(discovery))
+    return 0
+
+
 def _cmd_pak_build(args: argparse.Namespace) -> int:
     root = Path(args.input).expanduser().resolve()
     if not root.is_dir():
@@ -122,6 +185,13 @@ def _cmd_catalog_export(args: argparse.Namespace) -> int:
     entries = catalog_from_pak(args.path)
     export_catalog(entries, args.output)
     print(f"exported {len(entries)} rows to {Path(args.output).resolve()}")
+    return 0
+
+
+def _cmd_catalog_export_friendly(args: argparse.Namespace) -> int:
+    entries = catalog_from_pak(args.path)
+    export_friendly_catalog(entries, args.output)
+    print(f"exported {len(entries)} friendly rows to {Path(args.output).resolve()}")
     return 0
 
 
@@ -395,7 +465,7 @@ def _cmd_workflow_build(args: argparse.Namespace) -> int:
 
 def _cmd_workflow_batch_scan(args: argparse.Namespace) -> int:
     output, count, report = export_batch_profile_catalog(
-        load_profile(args.profile), overwrite=args.overwrite
+        load_profile(args.profile), overwrite=args.overwrite, friendly=args.friendly
     )
     print(f"exported {count} rows to {output}")
     print(f"report {report}")
@@ -505,6 +575,32 @@ def build_parser() -> argparse.ArgumentParser:
     pak_extract.add_argument("--match")
     pak_extract.add_argument("--overwrite", action="store_true")
     pak_extract.set_defaults(func=_cmd_pak_extract)
+    pak_decrypt = pak_sub.add_parser("decrypt")
+    pak_decrypt.add_argument("path")
+    pak_decrypt.add_argument("output")
+    pak_decrypt.add_argument("--decryptor")
+    pak_decrypt.add_argument("--public-key")
+    pak_decrypt.add_argument("--game-root")
+    pak_decrypt.add_argument("--key-output")
+    pak_decrypt.add_argument("--overwrite", action="store_true")
+    pak_decrypt.add_argument("--timeout", type=float, default=300.0)
+    pak_decrypt.set_defaults(func=_cmd_pak_decrypt)
+    pak_decrypt_tree = pak_sub.add_parser("decrypt-tree")
+    pak_decrypt_tree.add_argument("input")
+    pak_decrypt_tree.add_argument("output")
+    pak_decrypt_tree.add_argument("--decryptor")
+    pak_decrypt_tree.add_argument("--public-key")
+    pak_decrypt_tree.add_argument("--game-root")
+    pak_decrypt_tree.add_argument("--key-output")
+    pak_decrypt_tree.add_argument("--mode", choices=("pak", "extract"), default="pak")
+    pak_decrypt_tree.add_argument("--report")
+    pak_decrypt_tree.add_argument("--overwrite", action="store_true")
+    pak_decrypt_tree.add_argument("--timeout", type=float, default=300.0)
+    pak_decrypt_tree.set_defaults(func=_cmd_pak_decrypt_tree)
+    pak_discover_key = pak_sub.add_parser("discover-key")
+    pak_discover_key.add_argument("game_root")
+    pak_discover_key.add_argument("--output")
+    pak_discover_key.set_defaults(func=_cmd_pak_discover_key)
     pak_build = pak_sub.add_parser("build")
     pak_build.add_argument("input")
     pak_build.add_argument("output")
@@ -516,6 +612,10 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_export.add_argument("path")
     catalog_export.add_argument("--output", required=True)
     catalog_export.set_defaults(func=_cmd_catalog_export)
+    catalog_friendly = catalog_sub.add_parser("export-friendly")
+    catalog_friendly.add_argument("path")
+    catalog_friendly.add_argument("--output", required=True)
+    catalog_friendly.set_defaults(func=_cmd_catalog_export_friendly)
 
     profile = sub.add_parser("profile", help="create and validate a generic project profile")
     profile_sub = profile.add_subparsers(dest="profile_command", required=True)
@@ -659,6 +759,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_batch_scan = workflow_sub.add_parser("batch-scan")
     workflow_batch_scan.add_argument("profile")
     workflow_batch_scan.add_argument("--overwrite", action="store_true")
+    workflow_batch_scan.add_argument("--friendly", action="store_true")
     workflow_batch_scan.set_defaults(func=_cmd_workflow_batch_scan)
     workflow_batch_dry_run = workflow_sub.add_parser("batch-dry-run")
     workflow_batch_dry_run.add_argument("profile")

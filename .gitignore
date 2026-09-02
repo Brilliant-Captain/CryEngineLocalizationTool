@@ -20,6 +20,8 @@ reports/
 *.log
 *.exe
 *.dll
+!resources/bin/
+!resources/bin/cry-pak-decrypt.exe
 *.jar
 *.7z
 *.zip
@@ -31,3 +33,5 @@ work/
 *_Work/
 *_work/
 user-config.toml
+
+_release_verify/

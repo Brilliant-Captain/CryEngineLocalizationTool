@@ -1,10 +1,15 @@
 [CmdletBinding()]
 param(
-  [string]$OutputDir = (Join-Path $PSScriptRoot '..\release')
+  [string]$OutputDir = (Join-Path $PSScriptRoot '../release'),
+  [string]$DecryptorPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$defaultDecryptorPath = Join-Path $projectRoot 'resources/bin/cry-pak-decrypt.exe'
+if ([string]::IsNullOrWhiteSpace($DecryptorPath)) {
+  $DecryptorPath = $defaultDecryptorPath
+}
 $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
 $specs = @(
   (Join-Path $projectRoot 'packaging\CryEngineLocalization.spec'),
@@ -44,6 +49,15 @@ try {
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
       throw "Expected executable was not produced: $exe"
     }
+  }
+
+  if (Test-Path -LiteralPath $DecryptorPath -PathType Leaf) {
+    $resourceDir = Join-Path $outputPath 'resources/bin'
+    New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
+    Copy-Item -LiteralPath $DecryptorPath -Destination (Join-Path $resourceDir 'cry-pak-decrypt.exe') -Force
+    Write-Host "Bundled PAK decryptor $DecryptorPath"
+  } else {
+    Write-Host "No bundled PAK decryptor found; pass -DecryptorPath to include one."
   }
 
   $checksums = foreach ($exe in $executables) {

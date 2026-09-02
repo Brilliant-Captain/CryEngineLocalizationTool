@@ -52,7 +52,7 @@ class BatchFontBuild:
 
 def _relative_path(root: Path, value: str, *, label: str) -> Path:
     normalized = normalize_entry_path(value)
-    candidate = (root / Path(*normalized.split("/"))).resolve()
+    candidate = (root / Path(*normalized.split("/"))).absolute()
     try:
         candidate.relative_to(root)
     except ValueError as exc:

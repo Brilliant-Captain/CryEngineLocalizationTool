@@ -26,7 +26,14 @@ cry-localize --help
 ```powershell
 cry-localize identify <PROJECT_ROOT>
 cry-localize pak list <GAME_ROOT>\Assets\GameData.pak
+cry-localize pak discover-key <GAME_ROOT> --output public.der
+cry-localize pak decrypt <INPUT_PAK> <OUTPUT_PAK> --public-key public.der
+cry-localize pak decrypt <INPUT_PAK> <OUTPUT_PAK> --game-root <GAME_ROOT>
+cry-localize pak decrypt-tree <INPUT_ROOT> <OUTPUT_ROOT> --public-key <PUBLIC_DER> --mode pak
+cry-localize pak decrypt-tree <INPUT_ROOT> <OUTPUT_ROOT> --game-root <GAME_ROOT> --mode pak
+cry-localize pak decrypt-tree <INPUT_ROOT> <OUTPUT_ROOT> --public-key <PUBLIC_DER> --mode extract --report decrypt-report.json
 cry-localize catalog export <GAME_ROOT>\Assets\GameData.pak --output translations.csv
+cry-localize catalog export-friendly <GAME_ROOT>\Assets\GameData.pak --output translation-work.csv
 cry-localize profile init --output project.json
 cry-localize workflow export-csv project.json
 cry-localize workflow dry-run project.json
@@ -54,6 +61,8 @@ cry-localize rollback install.json
 cry-localize gui
 ```
 
+`workflow batch-scan --friendly` 和 `catalog export-friendly` 会额外输出 `source_text` 与空白的 `target_translation`。`source_text` 优先采用 XML 已有的 `TRANSLATED TEXT`，否则采用 `ORIGINAL TEXT`；填写 `target_translation` 后，现有 `apply`、`build` 和批量构建流程会把它写回原始 `TRANSLATED TEXT` 列，同时继续校验 `original_text` 与 `original_hash`。
+
 `apply` 的非 dry-run 模式只写新的输出 PAK；源包保持不变。旧式 CryEngine PAK 中中央目录 `/` 与本地头 `\` 的路径差异会在安全规范化、大小和 CRC 校验后兼容读取。War of Rights 的加载约定、配置备份和字体/贴图依赖说明见 [适配器文档](docs/adapters/war-of-rights.md)。
 
 `CryEngineLocalization.exe` 是完整的 Tkinter 工作台；`cry-localize.exe` 是同一套源码构建的 console CLI。两者都支持通用 project profile；在无图形环境时使用 CLI。
@@ -75,3 +84,8 @@ cry-localize gui
 全游戏资源扫描、人工翻译 CSV 与批量字体 overlay 见 [批量资源工作流](docs/adapters/batch-resource-localization.md)。GFX 非字体字符串只会进入 `report-only` 查漏记录，工具不会回写它们。
 
 如果 FFDec 已加入 PATH 或设置了 `FFDEC_CLI` 环境变量，`font scan/replace` 可以省略 `--ffdec`。
+### 加密 CryEngine PAK
+
+`pak decrypt` 使用 libcrypak 兼容后端处理 CryEngine 原生加密 PAK。普通 ZIP 风格 PAK 会直接复制并校验；加密 PAK 会解密为可读取的 ZIP 风格 PAK。`decrypt-tree` 递归扫描输入目录，`--mode pak` 保持每个 `.pak` 的相对路径，`--mode extract` 将成员展开到同名目录，并可用 `--report` 写出逐文件 SHA-256、条目数和失败原因。
+
+源码运行时可通过 `--decryptor` 指定后端，或设置 `CRYENGINE_PAK_DECRYPTOR`。Windows 发行版将后端放在 `resources/bin/cry-pak-decrypt.exe`，用户无需安装 libtomcrypt、libtommath、CMake 或编译器。`pak discover-key` 会扫描用户指定游戏目录中的 EXE/DLL，提取嵌入的 CryEngine RSA DER，并写入用户指定的公钥文件；也可通过 `--public-key` 或 `CRYENGINE_PAK_PUBLIC_KEY` 直接提供已有公钥。
