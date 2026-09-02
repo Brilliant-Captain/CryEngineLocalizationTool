@@ -51,10 +51,12 @@ try {
     }
   }
 
+  $bundledDecryptor = $null
   if (Test-Path -LiteralPath $DecryptorPath -PathType Leaf) {
     $resourceDir = Join-Path $outputPath 'resources/bin'
     New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
-    Copy-Item -LiteralPath $DecryptorPath -Destination (Join-Path $resourceDir 'cry-pak-decrypt.exe') -Force
+    $bundledDecryptor = Join-Path $resourceDir 'cry-pak-decrypt.exe'
+    Copy-Item -LiteralPath $DecryptorPath -Destination $bundledDecryptor -Force
     Write-Host "Bundled PAK decryptor $DecryptorPath"
   } else {
     Write-Host "No bundled PAK decryptor found; pass -DecryptorPath to include one."
@@ -70,7 +72,28 @@ try {
     Write-Host "Built $exe"
     Write-Host "SHA256 $($hash.Hash)"
   }
+  if ($bundledDecryptor) {
+    $hash = Get-FileHash -LiteralPath $bundledDecryptor -Algorithm SHA256
+    $checksums += [pscustomobject]@{
+      file = 'resources/bin/cry-pak-decrypt.exe'
+      size = (Get-Item -LiteralPath $bundledDecryptor).Length
+      sha256 = $hash.Hash
+    }
+  }
   $checksums | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputPath 'SHA256SUMS.json') -Encoding UTF8
+
+  $version = (& $python -c "from cryengine_localization import __version__; print(__version__)").Trim()
+  $portableZip = Join-Path $outputPath ("CryEngineLocalization-v{0}-win64.zip" -f $version)
+  $portableFiles = @(
+    (Join-Path $outputPath 'CryEngineLocalization.exe'),
+    (Join-Path $outputPath 'cry-localize.exe'),
+    (Join-Path $outputPath 'SHA256SUMS.json')
+  )
+  if ($bundledDecryptor) {
+    $portableFiles += (Join-Path $outputPath 'resources')
+  }
+  Compress-Archive -Path $portableFiles -DestinationPath $portableZip -CompressionLevel Optimal
+  Write-Host "Built $portableZip"
 } finally {
   if (Test-Path -LiteralPath $workPath) {
     Remove-Item -LiteralPath $workPath -Recurse -Force -ErrorAction SilentlyContinue
