@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- Added a Windows portable ZIP release asset containing GUI, CLI, SHA256 manifest, and the bundled PAK decryptor.
+- Added the bundled decryptor hash to SHA256SUMS.json.
+
 ## 0.7.0
 
 - Added CryEngine encrypted PAK decryption for single files and recursive directory trees, with path-preserving PAK or extracted-member output.
