@@ -12,6 +12,7 @@ from pathlib import Path
 from cryengine_localization import __version__
 from cryengine_localization.adapters.cryengine import identify_project
 from cryengine_localization.adapters.pak import build_pak, extract_pak, scan_pak
+from cryengine_localization.adapters.pak_crypak import repack_crypak
 from cryengine_localization.adapters.pak_decrypt import (
     decrypt_pak,
     decrypt_pak_tree,
@@ -178,6 +179,27 @@ def _cmd_pak_build(args: argparse.Namespace) -> int:
     }
     output = build_pak(entries, output_path)
     print(output)
+    return 0
+
+
+def _cmd_pak_repack_crypak(args: argparse.Namespace) -> int:
+    result = repack_crypak(
+        args.source_pak,
+        args.source_zip,
+        args.output,
+        public_key=args.public_key,
+        backend=args.backend,
+    )
+    _print_json(
+        {
+            "source_pak": str(result.source_pak),
+            "source_zip": str(result.source_zip),
+            "output_pak": str(result.output_pak),
+            "backend": str(result.backend),
+            "output_size": result.output_size,
+            "output_sha256": result.output_sha256,
+        }
+    )
     return 0
 
 
@@ -605,6 +627,13 @@ def build_parser() -> argparse.ArgumentParser:
     pak_build.add_argument("input")
     pak_build.add_argument("output")
     pak_build.set_defaults(func=_cmd_pak_build)
+    pak_repack = pak_sub.add_parser("repack-crypak", help="rebuild an encrypted CryEngine PAK")
+    pak_repack.add_argument("source_pak")
+    pak_repack.add_argument("source_zip")
+    pak_repack.add_argument("output")
+    pak_repack.add_argument("--public-key", required=True)
+    pak_repack.add_argument("--backend")
+    pak_repack.set_defaults(func=_cmd_pak_repack_crypak)
 
     catalog = sub.add_parser("catalog", help="export a translation catalog")
     catalog_sub = catalog.add_subparsers(dest="catalog_command", required=True)

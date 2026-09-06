@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import codecs
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Iterable
 from xml.dom import Node, minidom
 from xml.parsers.expat import ExpatError
+from xml.sax.saxutils import escape
 
 from cryengine_localization.core.catalog import CatalogEntry
 
@@ -209,6 +211,55 @@ def _set_element_text(document: minidom.Document, element: minidom.Element, valu
     element.appendChild(document.createTextNode(value))
 
 
+def _spreadsheet_row_matches(raw: bytes) -> list[tuple[int, int]]:
+    """Locate worksheet rows and exclude Excel metadata rows."""
+    table_pattern = re.compile(rb"<Table(?=\s|>)[^>]*>.*?</Table\s*>", re.DOTALL)
+    row_pattern = re.compile(
+        rb"<Row(?=\s|>)[^>]*/>|<Row(?=\s|>)[^>]*>.*?</Row\s*>",
+        re.DOTALL,
+    )
+    matches: list[tuple[int, int]] = []
+    for table in table_pattern.finditer(raw):
+        for row in row_pattern.finditer(raw, table.start(), table.end()):
+            if row.end() <= table.end():
+                matches.append((row.start(), row.end()))
+    return matches
+
+
+def _cell_matches(row_bytes: bytes) -> list[tuple[int, int]]:
+    """Return direct Cell spans, including self-closing and nested cells."""
+    starts = [m.start() for m in re.finditer(rb"<Cell(?=\s|>|/)", row_bytes)]
+    spans: list[tuple[int, int]] = []
+    for start in starts:
+        quote: int | None = None
+        tag_end: int | None = None
+        index = start
+        while index < len(row_bytes):
+            byte = row_bytes[index]
+            if quote is not None:
+                if byte == quote:
+                    quote = None
+            elif byte in (34, 39):
+                quote = byte
+            elif byte == 62:
+                tag_end = index + 1
+                break
+            index += 1
+        if tag_end is None:
+            continue
+        if row_bytes[tag_end - 2 : tag_end] == b"/>":
+            spans.append((start, tag_end))
+            continue
+        close = row_bytes.find(b"</Cell", tag_end)
+        if close < 0:
+            continue
+        close_end = row_bytes.find(b">", close)
+        if close_end < 0:
+            continue
+        spans.append((start, close_end + 1))
+    return spans
+
+
 def apply_catalog_to_spreadsheetml_bytes(
     source_path: str,
     raw: bytes | str,
@@ -217,11 +268,21 @@ def apply_catalog_to_spreadsheetml_bytes(
     """Apply translations to SpreadsheetML while preserving non-translation cells."""
 
     document, had_bom = _parse_document(raw)
+    original_bytes = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
     records = _records(document, source_path)
     current = {record.resource_id: (record, _to_catalog(record, source_path)) for record in records}
     by_key_hash: dict[tuple[str, str], list[tuple[_SpreadsheetRecord, CatalogEntry]]] = {}
     for record, entry in current.values():
         by_key_hash.setdefault((entry.text_key, entry.original_hash), []).append((record, entry))
+    replacements: list[tuple[int, int, bytes]] = []
+    rows = document.getElementsByTagNameNS(SPREADSHEET_NS, "Row")
+    row_matches = _spreadsheet_row_matches(original_bytes)
+    if len(rows) != len(row_matches):
+        raise ValueError("SpreadsheetML row layout could not be preserved")
+
+    def escaped(value: str) -> bytes:
+        return escape(value, {"\"": "&quot;", "'": "&apos;"}).encode("utf-8")
+
     for requested in entries:
         match = current.get(requested.resource_id)
         if match is None:
@@ -232,7 +293,52 @@ def apply_catalog_to_spreadsheetml_bytes(
         record, entry = match
         if entry.original_hash != requested.original_hash:
             raise ValueError(f"source changed since catalog export: {requested.resource_id}")
-        data = _ensure_translation_data(document, record)
-        _set_element_text(document, data, requested.translation)
-    output = document.toxml(encoding="utf-8")
-    return codecs.BOM_UTF8 + output if had_bom else output
+        row_index = next((index for index, row in enumerate(rows) if row is record.row), None)
+        if row_index is None:
+            raise ValueError(f"SpreadsheetML row is absent from source: {requested.resource_id}")
+        row_start, row_end = row_matches[row_index]
+        row_bytes = original_bytes[row_start:row_end]
+        cells = _element_children(record.row, "Cell")
+        target_cell = record.translation_cell
+        if target_cell is None:
+            target_ordinal = len(cells)
+            cell_matches = _cell_matches(row_bytes)
+            if target_ordinal != len(cell_matches):
+                raise ValueError(f"SpreadsheetML cell layout could not be preserved: {requested.resource_id}")
+            index_attr = f' ss:Index="{record.translation_column}"'.encode("ascii")
+            replacement = b"<Cell" + index_attr + b"><Data ss:Type=\"String\">" + escaped(requested.translation) + b"</Data></Cell>"
+            insert_at = row_match.end() - 6
+            if row_bytes.rstrip().endswith(b"</Row>"):
+                close_offset = row_bytes.rfind(b"</Row")
+                replacements.append((row_start + close_offset, row_start + close_offset, replacement))
+            else:
+                raise ValueError(f"SpreadsheetML row terminator missing: {requested.resource_id}")
+            continue
+        target_ordinal = next((index for index, cell in enumerate(cells) if cell is target_cell), None)
+        if target_ordinal is None:
+            raise ValueError(f"SpreadsheetML translation cell is absent: {requested.resource_id}")
+        cell_matches = _cell_matches(row_bytes)
+        if target_ordinal >= len(cell_matches):
+            raise ValueError(f"SpreadsheetML cell layout could not be preserved: {requested.resource_id}")
+        cell_start, cell_end = cell_matches[target_ordinal]
+        cell_bytes = row_bytes[cell_start:cell_end]
+        data_match = re.search(rb"(<Data\b[^>]*>)(.*?)(</Data>)", cell_bytes, re.DOTALL)
+        if data_match:
+            start = row_start + cell_start + data_match.start(2)
+            end = row_start + cell_start + data_match.end(2)
+            replacements.append((start, end, escaped(requested.translation)))
+        else:
+            insertion = b'<Data ss:Type="String">' + escaped(requested.translation) + b"</Data>"
+            if cell_bytes.rstrip().endswith(b"/>"):
+                start = row_start + cell_start
+                replacements.append((start, start + len(cell_bytes), cell_bytes.rstrip()[:-2] + b">" + insertion + b"</Cell>"))
+            else:
+                close = cell_bytes.rfind(b"</Cell>")
+                if close < 0:
+                    raise ValueError(f"SpreadsheetML cell has no writable Data node: {requested.resource_id}")
+                start = row_start + cell_start + close
+                replacements.append((start, start, insertion))
+    output = bytearray(original_bytes)
+    for start, end, replacement in sorted(replacements, reverse=True):
+        output[start:end] = replacement
+    return bytes(output)

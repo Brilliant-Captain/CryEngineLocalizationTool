@@ -6,6 +6,7 @@ __pycache__/
 build/
 dist/
 release/
+release-crypak-local/
 output/
 staging/
 reports/
@@ -22,6 +23,7 @@ reports/
 *.dll
 !resources/bin/
 !resources/bin/cry-pak-decrypt.exe
+!resources/bin/cry-pak-repack.dll
 *.jar
 *.7z
 *.zip

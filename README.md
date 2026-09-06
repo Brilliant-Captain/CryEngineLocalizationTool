@@ -50,6 +50,10 @@ cry-localize apply translations.csv --source-pak GameData.pak --output-pak outpu
 cry-localize font scan gfxfontlib.gfx --ffdec <FFDEC_CLI>
 cry-localize font replace gfxfontlib.gfx --output-gfx output\gfxfontlib.gfx --ffdec <FFDEC_CLI> --slot 7=<REGULAR_FONT> --slot 16=<BOLD_FONT>
 cry-localize font coverage <REGULAR_FONT> translation-text.txt
+
+# CryEngine 加密 PAK 原格式重打包
+cry-localize pak repack-crypak <ORIGINAL_ENCRYPTED_PAK> <DESIRED_ZIP> <OUTPUT_PAK> \
+  --public-key <CRYENGINE_PUBLIC_DER> --backend resources/bin/cry-pak-repack.dll
 cry-localize font subset <REGULAR_FONT> translation-text.txt --output-font output\regular-subset.ttf
 cry-localize texture inspect menu.dds
 cry-localize texture encode menu.png --output-dds output\menu.dds

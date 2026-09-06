@@ -19,6 +19,7 @@ from .pak_decrypt import (
     resolve_decryptor,
     resolve_public_key,
 )
+from .pak_crypak import CryPakRepackError, CryPakRepackResult, repack_crypak, resolve_repack_backend
 
 __all__ = [
     "BatchResourceScan",
@@ -36,4 +37,8 @@ __all__ = [
     "discover_public_key",
     "resolve_decryptor",
     "resolve_public_key",
+    "CryPakRepackError",
+    "CryPakRepackResult",
+    "repack_crypak",
+    "resolve_repack_backend",
 ]

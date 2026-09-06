@@ -1,14 +1,19 @@
 [CmdletBinding()]
 param(
   [string]$OutputDir = (Join-Path $PSScriptRoot '../release'),
-  [string]$DecryptorPath = ''
+  [string]$DecryptorPath = '',
+  [string]$RepackBackendPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $defaultDecryptorPath = Join-Path $projectRoot 'resources/bin/cry-pak-decrypt.exe'
+$defaultRepackBackendPath = Join-Path $projectRoot 'resources/bin/cry-pak-repack.dll'
 if ([string]::IsNullOrWhiteSpace($DecryptorPath)) {
   $DecryptorPath = $defaultDecryptorPath
+}
+if ([string]::IsNullOrWhiteSpace($RepackBackendPath)) {
+  $RepackBackendPath = $defaultRepackBackendPath
 }
 $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
 $specs = @(
@@ -62,6 +67,17 @@ try {
     Write-Host "No bundled PAK decryptor found; pass -DecryptorPath to include one."
   }
 
+  $bundledRepackBackend = $null
+  if (Test-Path -LiteralPath $RepackBackendPath -PathType Leaf) {
+    $resourceDir = Join-Path $outputPath 'resources/bin'
+    New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
+    $bundledRepackBackend = Join-Path $resourceDir 'cry-pak-repack.dll'
+    Copy-Item -LiteralPath $RepackBackendPath -Destination $bundledRepackBackend -Force
+    Write-Host "Bundled CryPak repack backend $RepackBackendPath"
+  } else {
+    Write-Host "No bundled CryPak repack backend found; pass -RepackBackendPath to include one."
+  }
+
   $checksums = foreach ($exe in $executables) {
     $hash = Get-FileHash -LiteralPath $exe -Algorithm SHA256
     [pscustomobject]@{
@@ -80,6 +96,14 @@ try {
       sha256 = $hash.Hash
     }
   }
+  if ($bundledRepackBackend) {
+    $hash = Get-FileHash -LiteralPath $bundledRepackBackend -Algorithm SHA256
+    $checksums += [pscustomobject]@{
+      file = 'resources/bin/cry-pak-repack.dll'
+      size = (Get-Item -LiteralPath $bundledRepackBackend).Length
+      sha256 = $hash.Hash
+    }
+  }
   $checksums | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputPath 'SHA256SUMS.json') -Encoding UTF8
 
   $version = (& $python -c "from cryengine_localization import __version__; print(__version__)").Trim()
@@ -90,6 +114,9 @@ try {
     (Join-Path $outputPath 'SHA256SUMS.json')
   )
   if ($bundledDecryptor) {
+    $portableFiles += (Join-Path $outputPath 'resources')
+  }
+  if ($bundledRepackBackend -and -not $bundledDecryptor) {
     $portableFiles += (Join-Path $outputPath 'resources')
   }
   Compress-Archive -Path $portableFiles -DestinationPath $portableZip -CompressionLevel Optimal

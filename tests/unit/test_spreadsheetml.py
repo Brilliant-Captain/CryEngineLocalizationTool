@@ -54,6 +54,25 @@ def test_spreadsheetml_apply_changes_only_translation_cell() -> None:
     assert b"Menu" in output
 
 
+def test_spreadsheetml_preserves_original_declaration_and_line_endings() -> None:
+    raw = SPREADSHEET.replace(b"\n", b"\r\n")
+    entry = CatalogEntry(
+        "english_xml/text_ui_menus.xml:ui_exit",
+        "english_xml/text_ui_menus.xml",
+        "ui_exit",
+        "Exit",
+        hashlib.sha256(b"Exit").hexdigest(),
+        "退出",
+    )
+    output = apply_catalog_to_spreadsheetml_bytes(
+        "english_xml/text_ui_menus.xml", raw, [entry]
+    )
+    assert output.startswith(b'<?xml version="1.0"?>\r\n')
+    assert output.count(b"\r\n") == raw.count(b"\r\n")
+    assert b'encoding="utf-8"' not in output.split(b"\r\n", 1)[0]
+    assert '<Data ss:Type="String">退出</Data>'.encode("utf-8") in output
+
+
 def test_spreadsheetml_apply_rejects_changed_original() -> None:
     entry = CatalogEntry(
         "english_xml/text_ui_menus.xml:ui_start",

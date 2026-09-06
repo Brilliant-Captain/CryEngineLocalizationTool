@@ -88,6 +88,19 @@ cry-localize pak list <GAME_ROOT>\Assets\GameData.pak
 cry-localize pak extract <GAME_ROOT>\Assets\UI.pak <TEMP_ROOT>\UI --match gfxfontlib.gfx
 ```
 
+### CryPak 原格式重打包
+
+对于使用 CryEngine 加密 PAK 的项目，普通 `pak build` 输出的是 ZIP，游戏不会加载。先将原始加密 PAK 解密为完整 ZIP，修改 ZIP 内成员后使用原包的加密头重建：
+
+```powershell
+cry-localize pak repack-crypak \
+  <ORIGINAL_ENCRYPTED_PAK> <DESIRED_STANDARD_ZIP> <OUTPUT_ENCRYPTED_PAK> \
+  --public-key <CRYENGINE_PUBLIC_DER> \
+  --backend resources\bin\cry-pak-repack.dll
+```
+
+writer 会复用源 PAK 的 CryPak comment、RSA 封装的对称密钥表和 CDR 初始向量，仅重建加密文件区、中央目录和 EOCD。输出首字节不应为 `PK 03 04`；建议立即用 `pak decrypt` 做 round-trip，比较成员名、CRC 与内容哈希后再安装。
+
 `identify` 输出 CryEngine 置信度和 PAK 列表。`extract` 的输出根目录必须是临时目录或用户明确指定的工作目录，工具会拒绝路径遍历。
 
 版本识别输出包含：

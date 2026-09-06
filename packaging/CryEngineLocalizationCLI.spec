@@ -8,7 +8,7 @@ project_root = Path(SPEC).resolve().parents[1]
 a = Analysis(
     [str(project_root / "scripts" / "cli_entry.py")],
     pathex=[str(project_root / "src")],
-    binaries=[],
+    binaries=[(str(project_root / "resources" / "bin" / "cry-pak-repack.dll"), "resources/bin")],
     datas=[(str(project_root / "src" / "cryengine_localization" / "locales"), "cryengine_localization/locales")],
     hiddenimports=["tkinter", "tkinter.filedialog", "tkinter.messagebox", *collect_submodules("fontTools")],
     hookspath=[],

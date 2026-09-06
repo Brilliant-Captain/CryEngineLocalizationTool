@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- Added CryPak-native repacking with the bundled writer backend.
+- Preserved legacy SpreadsheetML XML byte layout during translation writes.
+- Added round-trip validation and portable build support for the CryPak writer.
+
 ## 0.7.1
 
 - Added a Windows portable ZIP release asset containing GUI, CLI, SHA256 manifest, and the bundled PAK decryptor.
@@ -60,3 +66,8 @@
 - Added legacy GFX safety assessment and tag-level DefineFont3 migration to avoid unsafe full-file FFDec rebuilds.
 - Added full-font and subset-font documentation and a console PyInstaller entry point.
 - Added public contribution, security, release, and GUI operation guides.
+# Unreleased
+
+- Add CryPak-native repacking through the bundled `cry-pak-repack.dll` backend.
+- Add `pak repack-crypak` CLI command with ASCII staging for Windows paths.
+- Add round-trip tests and package the writer backend in portable builds.
