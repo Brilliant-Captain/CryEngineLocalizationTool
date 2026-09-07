@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+
+- Removed machine-specific CryPak fixture paths from the public test suite; optional local fixtures are now supplied through environment variables.
+- Clarified friendly catalog semantics: `source_text` is translator-facing context, `target_translation` is the editable field, and `original_text`/`original_hash` remain immutable source validation fields.
+
 ## 0.8.0
 
 - Added CryPak-native repacking with the bundled writer backend.

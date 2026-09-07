@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import zipfile
+import os
 from pathlib import Path
 
 import pytest
@@ -10,15 +11,16 @@ from cryengine_localization.adapters.pak_crypak import repack_crypak
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_PAK = Path(r"C:\Fixtures\ExampleGame\Localization\english_xml.pak")
-PUBLIC_KEY = Path(r"C:\Fixtures\ExampleGame\cryengine-public.der")
-SOURCE_ZIP = Path(r"C:\Fixtures\ExampleGame\english-original-decrypted.zip")
+SAMPLE_PAK = Path(os.environ["CRYENGINE_SAMPLE_PAK"]) if os.environ.get("CRYENGINE_SAMPLE_PAK") else None
+PUBLIC_KEY = Path(os.environ["CRYENGINE_PUBLIC_KEY"]) if os.environ.get("CRYENGINE_PUBLIC_KEY") else None
+SOURCE_ZIP = Path(os.environ["CRYENGINE_SOURCE_ZIP"]) if os.environ.get("CRYENGINE_SOURCE_ZIP") else None
 BACKEND = ROOT / "resources" / "bin" / "cry-pak-repack.dll"
 DECRYPTOR = ROOT / "resources" / "bin" / "cry-pak-decrypt.exe"
 
 
 @pytest.mark.skipif(
-    not all(path.is_file() for path in (SAMPLE_PAK, PUBLIC_KEY, SOURCE_ZIP, BACKEND, DECRYPTOR)),
+    not all(path is not None and path.is_file() for path in (SAMPLE_PAK, PUBLIC_KEY, SOURCE_ZIP))
+    or not all(path.is_file() for path in (BACKEND, DECRYPTOR)),
     reason="local CryPak fixtures unavailable",
 )
 def test_repack_crypak_roundtrip_preserves_members(tmp_path: Path) -> None:
